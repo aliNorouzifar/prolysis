@@ -1,4 +1,4 @@
-import functions.functions.declare_processing as declare_processing
+import prolysis.rules_handling.declare_processing as declare_processing
 
 
 def is_allowed(SS1,SS2,rules_lookup):

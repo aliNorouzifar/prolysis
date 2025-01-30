@@ -1,47 +1,76 @@
-import json
-import functions.functions.declare_processing as declare_processing
+import pm4py
+import pandas as pd
+
+def import_log(address):
+    case_id_name = 'case:concept:name'
+    timestamp_name = 'time:timestamp'
+    acyivity_name = 'concept:name'
+
+    log = pm4py.read_xes(str(address))
+    case_table, event_table, map_info = log_to_tables(log, parameters={'case_id': case_id_name,
+                                                                                        'timestamp': timestamp_name,
+                                                                                        'activity_name': acyivity_name})
+    case_table.to_csv('output_files/out.csv', index=False)
+    event_table.to_csv('output_files/out_event.csv', index=False)
 
 
-def rules_from_json(file_path):
-    with open(file_path, 'r') as file:
-        declare_file = json.load(file)
-    return declare_file['constraints'],set(declare_file['tasks'])
-def preprocess(rules):
-    rules_processes = []
-    co_exist_list = []
-    absence_list = set([r['parameters'][0][0] for r in rules if r['template'] == "Absence"])
-    for r in rules:
-        if r['template'] == 'AtLeast2' or r['template'] == 'AtLeast3':
-            r_new = r.copy()
-            r_new['template'] = 'AtLeast1'
-            rules_processes.append(r_new)
-        elif r['template'] =="Absence":
-            continue
-        elif r['template'] == 'AtMost2' or r['template'] == 'AtMost3':
-            continue
-        elif r['template'] == 'CoExistence':
-            co_exist_list.append((r['parameters'][0][0],r['parameters'][1][0]))
-            if (r['parameters'][1][0],r['parameters'][0][0]) not in co_exist_list:
-                rules_processes.append(r)
-        else:
-            rules_processes.append(r)
-    return rules_processes,absence_list
+    return len(case_table),case_table.select_dtypes(include=['number']).columns
 
-def dfa_list_generator(rules,S_mapped):
-    dfa_list = []
-    for c in rules:
-        if "Absence" in c['template'] or "Init" in c['template'] or "End" in c['template'] or "AtMost" in c[
-            'template'] or "AtLeast" in c['template']:
-            dfa_to_add = declare_processing.gen_reg_dfa(c['template'], [c['parameters'][0][0]], S_mapped)
-            dfa_list.append(((c['template'], (c['parameters'][0][0])), dfa_to_add, c['support'],c['confidence']))
-        else:
-            dfa_to_add = declare_processing.gen_reg_dfa(c['template'],
-                                                        [c['parameters'][0][0], c['parameters'][1][0]],
-                                                        S_mapped)
-            dfa_list.append((
-                            (c['template'], (c['parameters'][0][0], c['parameters'][1][0])),
-                            dfa_to_add, c['support'],c['confidence']))
 
-    total_sup = sum([el[2] for el in dfa_list])
-    total_conf = sum([el[3] for el in dfa_list])
-    return dfa_list, total_sup, total_conf
+def log_to_tables(log, parameters):
+    # Convert log to a Pandas DataFrame
+    df = pm4py.convert_to_dataframe(log)
+
+    # Extract parameters
+    case_id_name = parameters['case_id']
+    timestamp_name = parameters['timestamp']
+    activity_name = parameters['activity_name']
+
+    # Constants
+    time_unit = 24 * 3600  # Time unit in seconds (1 day)
+
+    # Output column names
+    output_case_id_name = 'case_id'
+    output_timestamp_name = 'timestamp'
+    output_activity_name = 'activity_name'
+
+    # Identify case attributes (columns with unique values per case)
+    dfunique = df.groupby(case_id_name).nunique()
+    case_attributes = set(dfunique.columns[dfunique.max() <= 1])
+
+    # Build the case table
+    grouped = df.groupby(case_id_name)
+    case_table = grouped.first()[list(case_attributes)]
+    case_table['trace'] = grouped[activity_name].agg(lambda x: tuple(x.astype(str)))
+    case_table['duration'] = (grouped[timestamp_name].max() - grouped[
+        timestamp_name].min()).dt.total_seconds() // time_unit
+    case_table['n_events'] = grouped.size()
+    case_table = case_table.reset_index().rename(columns={case_id_name: output_case_id_name})
+
+    # Build the event table
+    non_attributes = {'row_num'}
+    event_attributes = set(df.columns) - case_attributes - non_attributes
+    event_table = df[list(event_attributes)]
+    event_table[timestamp_name] = pd.to_datetime(event_table[timestamp_name], utc=True)
+
+    # Sort events by timestamp (and EventOrder if available)
+    sort_columns = [timestamp_name]
+    if 'EventOrder' in event_table.columns:
+        sort_columns.append('EventOrder')
+    event_table = event_table.sort_values(sort_columns)
+
+    # Rename columns for the event table
+    event_table = event_table.rename(columns={
+        case_id_name: output_case_id_name,
+        timestamp_name: output_timestamp_name,
+        activity_name: output_activity_name
+    })
+
+    # Mapping for standardized column names
+    mapping = {
+        'case_id': output_case_id_name,
+        'timestamp': output_timestamp_name,
+        'activity_name': output_activity_name
+    }
+
+    return case_table, event_table, mapping

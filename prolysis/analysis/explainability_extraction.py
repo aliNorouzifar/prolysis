@@ -4,7 +4,7 @@ import pandas as pd
 import pm4py
 import shutil
 import os
-from functions.minerful_calls import mine_minerful_for_declare_constraints, prune_constraints_minerful
+from prolysis.calls.minerful_calls import mine_minerful_for_declare_constraints, prune_constraints_minerful
 import ruptures as rpt
 import csv
 from sklearn.metrics import mean_squared_error
@@ -13,8 +13,8 @@ from scipy.cluster.hierarchy import dendrogram, linkage
 from scipy.cluster.hierarchy import fcluster
 from scipy.spatial import KDTree
 import json
-from functions.redis_connection import redis_client
-from functions.logging import log_command
+from prolysis.util.redis_connection import redis_client
+from prolysis.util.logging import log_command
 
 linkage_method = 'ward'
 linkage_metric = 'euclidean'
@@ -618,8 +618,9 @@ def plot_figures(df, masks, n_bin, map_range, peaks, constraints, w, cluster_bou
         zmin=0,
         zmax=100,
         colorbar=dict(
-            title="Confidence",
-            titlefont=dict(size=18),
+            title=dict(
+                text = "Confidence",
+            font=dict(size=18)),
             tickfont=dict(size=16)
         )
     ))
@@ -691,8 +692,9 @@ def plot_figures(df, masks, n_bin, map_range, peaks, constraints, w, cluster_bou
         zmin=-1,
         zmax=1,
         colorbar=dict(
-            title="Correlation",
-            titlefont=dict(size=18),
+            title=dict(
+                text = "Correlation",
+            font=dict(size=18)),
             tickfont=dict(size=16)
         )
     ))

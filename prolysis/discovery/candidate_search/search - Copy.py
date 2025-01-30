@@ -1,6 +1,6 @@
-from functions.functions.functions import n_edges
-from functions.functions.functions import add_SE
-from functions.candidate_search.is_allowed_2 import is_allowed
+from prolysis.util.functions import n_edges
+from prolysis.util.functions import add_SE
+from prolysis.discovery.candidate_search.is_allowed_2 import is_allowed
 import networkx as nx
 
 

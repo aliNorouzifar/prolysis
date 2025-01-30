@@ -1,5 +1,5 @@
-from functions.functions.functions import n_edges
-from functions.candidate_search.is_allowed_2 import is_allowed_single
+from prolysis.util.functions import n_edges
+from prolysis.discovery.candidate_search.is_allowed_2 import is_allowed_single
 def check_base_case(netP, netM,rules ,sup_thr, ratio,self):
     activitiesP = set(netP.nodes) - {'start', 'end'}
     activitiesM = set(netM.nodes) - {'start', 'end'}

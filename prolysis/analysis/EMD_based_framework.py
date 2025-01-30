@@ -7,11 +7,11 @@ import itertools
 import pm4py
 import json
 import ast
-from functions.python_emsc import stochastic
+from prolysis.analysis.python_emsc import stochastic
 import plotly.graph_objects as go
 import numpy as np
-from functions.redis_connection import redis_client
-from functions.logging import log_command
+from prolysis.util.redis_connection import redis_client
+from prolysis.util.logging import log_command
 
 # # Constants
 OUTPUT_DIR = "output_files"
@@ -201,8 +201,9 @@ def plot_figures_segments(dist_matrix, peaks):
             y=labels,  # Y-axis labels
             colorscale="Reds",  # Color scheme
             colorbar=dict(
-                title="ldist",  # Colorbar title
-                titlefont=dict(size=18),  # Font size for the colorbar title
+                title=dict(
+                    text = "ldist",  # Colorbar title
+                font=dict(size=18)),  # Font size for the colorbar title
                 tickfont=dict(size=18)  # Font size for the colorbar ticks
             ),
             zmin=np.min(dist_matrix),  # Minimum value for color scaling

@@ -1,4 +1,4 @@
-from functions.functions.functions import n_edges,get_edge_weight, aggregate_dictionaries
+from prolysis.util.functions import n_edges,get_edge_weight, aggregate_dictionaries
 
 
 def cost_seq(net, A, B, sup, flow):

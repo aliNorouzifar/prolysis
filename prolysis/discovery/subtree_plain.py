@@ -1,9 +1,9 @@
-import functions.split_functions.split as split
-from functions.candidate_search.search import find_possible_partitions
-from functions.base_case.check import check_base_case
-from functions.cut_quality.cost_functions import cost_functions
-from functions.functions.functions import generate_nx_graph_from_log, generate_nx_indirect_graph_from_log, read_append_write_json
-from functions.cut_quality.cost_functions.cost_functions import overal_cost
+import prolysis.discovery.split_functions.split as split
+from prolysis.discovery.candidate_search.search import find_possible_partitions
+from prolysis.discovery.base_case.check import check_base_case
+from prolysis.discovery.cut_quality.cost_functions import cost_functions
+from prolysis.util.functions import generate_nx_graph_from_log, generate_nx_indirect_graph_from_log, read_append_write_json
+from prolysis.discovery.cut_quality.cost_functions.cost_functions import overal_cost
 
 class SubtreePlain(object):
     def __init__(self, logp,logm, rec_depth, noise_threshold= None,

@@ -3,7 +3,7 @@ from pm4py.objects.petri_net.obj import PetriNet, Marking
 from pm4py.objects.conversion.process_tree import converter as tree_to_petri
 from pm4py.objects.process_tree.utils import generic
 from pm4py.objects.process_tree.utils.generic import tree_sort
-from functions.subtree_plain import SubtreePlain
+from prolysis.discovery.subtree_plain import SubtreePlain
 from pm4py.objects.process_tree.obj import ProcessTree
 from pm4py.objects.process_tree.obj import Operator
 from pm4py.util import constants
@@ -21,8 +21,8 @@ import ast
 import os
 import time
 from pathlib import Path
-from functions.utils import rules_from_json, preprocess, dfa_list_generator
-import functions.functions.declare_processing as declare_processing
+from prolysis.rules_handling.utils import rules_from_json, preprocess, dfa_list_generator
+import prolysis.rules_handling.declare_processing as declare_processing
 
 
 class Parameters(Enum):

@@ -5,8 +5,10 @@ Summary: A Python package for process mining and analysis
 Home-page: https://github.com/aliNorouzifar/prolysis
 Author: Ali Norouzifar
 Author-email: ali.norouzifar@pads.rwth-aachen.de
+License: CC BY-NC 4.0
 Classifier: Programming Language :: Python :: 3
 Classifier: Operating System :: OS Independent
+License-File: LICENSE
 Requires-Dist: automata-lib==8.4.0
 Requires-Dist: frozendict==2.4.4
 Requires-Dist: networkx==2.8.8
@@ -26,5 +28,6 @@ Dynamic: author
 Dynamic: author-email
 Dynamic: classifier
 Dynamic: home-page
+Dynamic: license
 Dynamic: requires-dist
 Dynamic: summary
