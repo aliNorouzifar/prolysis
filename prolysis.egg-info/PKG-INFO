@@ -1,0 +1,30 @@
+Metadata-Version: 2.2
+Name: prolysis
+Version: 0.1.1
+Summary: A Python package for process mining and analysis
+Home-page: https://github.com/aliNorouzifar/prolysis
+Author: Ali Norouzifar
+Author-email: ali.norouzifar@pads.rwth-aachen.de
+Classifier: Programming Language :: Python :: 3
+Classifier: Operating System :: OS Independent
+Requires-Dist: automata-lib==8.4.0
+Requires-Dist: frozendict==2.4.4
+Requires-Dist: networkx==2.8.8
+Requires-Dist: matplotlib==3.10.0
+Requires-Dist: pm4py==2.7.13.1
+Requires-Dist: numpy==1.26.4
+Requires-Dist: pandas==2.2.3
+Requires-Dist: ruptures==1.1.9
+Requires-Dist: scikit_learn==1.6.0
+Requires-Dist: scipy==1.14.1
+Requires-Dist: seaborn==0.13.2
+Requires-Dist: pyemd==1.0.0
+Requires-Dist: redis==5.2.1
+Requires-Dist: numba==0.61.0
+Requires-Dist: pot==0.9.5
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: home-page
+Dynamic: requires-dist
+Dynamic: summary
