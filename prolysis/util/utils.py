@@ -6,7 +6,7 @@ def import_log(address):
     timestamp_name = 'time:timestamp'
     acyivity_name = 'concept:name'
 
-    log = pm4py.read_xes(str(address))
+    log = pm4py.read_xes(str(address), variant="rustxes")
     case_table, event_table, map_info = log_to_tables(log, parameters={'case_id': case_id_name,
                                                                                         'timestamp': timestamp_name,
                                                                                         'activity_name': acyivity_name})
@@ -17,9 +17,7 @@ def import_log(address):
     return len(case_table),case_table.select_dtypes(include=['number']).columns
 
 
-def log_to_tables(log, parameters):
-    # Convert log to a Pandas DataFrame
-    df = pm4py.convert_to_dataframe(log)
+def log_to_tables(df, parameters):
 
     # Extract parameters
     case_id_name = parameters['case_id']

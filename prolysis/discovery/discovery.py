@@ -15,14 +15,13 @@ import pm4py
 from automata.fa.dfa import DFA
 from pm4py.visualization.petri_net import visualizer as pn_visualizer
 from pm4py.objects.petri_net.utils.reachability_graph import construct_reachability_graph
-from pm4py.objects.log import obj as log_instance
-from pm4py.objects.log.importer.xes import importer as xes_importer
 import ast
 import os
 import time
 from pathlib import Path
 from prolysis.rules_handling.utils import rules_from_json, preprocess, dfa_list_generator
 import prolysis.rules_handling.declare_processing as declare_processing
+from collections import Counter
 
 
 class Parameters(Enum):
@@ -33,11 +32,11 @@ class Parameters(Enum):
 
 
 
-def apply_bi(logp, logm, parameters: Optional[Dict[Any, Any]] = None, sup= None, ratio = None, noise_thr =None, size_par = None, rules =None) -> Tuple[PetriNet, Marking, Marking]:
+def apply_bi(Lp=pd.DataFrame(), Lm=pd.DataFrame(), parameters: Optional[Dict[Any, Any]] = None, sup= None, ratio = None, noise_thr =None, size_par = None, rules =None) -> Tuple[PetriNet, Marking, Marking]:
     file_path = r'output_files\discovery_log.json'
     with open(file_path, 'w') as file:
         json.dump([], file, indent=4)
-    process_tree = apply_tree(logp, logm, parameters, sup=sup, ratio=ratio, noise_thr=noise_thr, size_par=size_par, rules=rules)
+    process_tree = apply_tree(Lp, Lm, parameters, sup=sup, ratio=ratio, noise_thr=noise_thr, size_par=size_par, rules=rules)
     net, initial_marking, final_marking = tree_to_petri.apply(process_tree)
 
     return net, initial_marking, final_marking
@@ -54,9 +53,16 @@ def apply_tree(logp,logm, parameters=None, sup= None, ratio = None, noise_thr =N
 
     recursion_depth = 0
 
-    logP_var = Counter(tuple([x['concept:name'] for x in t]) for t in logp)
-    logM_var = Counter(tuple([x['concept:name'] for x in t]) for t in logm)
-    sub = SubtreePlain(logP_var,logM_var, recursion_depth, noise_thr, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, rules= rules)
+    # logP_var = Counter(tuple([x['concept:name'] for x in t]) for t in logp)
+    # logP_var = pm4py.stats.get_variants(logp)
+    #
+    # logM_var = pm4py.stats.get_variants(logm)
+    if logm.empty:
+        logm_var = Counter()
+    else:
+        logm_var = pm4py.stats.get_variants(logm)
+    logp_var = pm4py.stats.get_variants(logp)
+    sub = SubtreePlain(logp_var,logm_var, recursion_depth, noise_thr, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, rules= rules)
 
     process_tree = get_repr(sub, 0, contains_empty_traces=contains_empty_traces)
     # Ensures consistency to the parent pointers in the process tree
@@ -208,11 +214,15 @@ def fix_one_child_xor_flower(tree):
 def run_IMr(LPlus_LogFile,rules_path,support):
 
     lookup_table_path = Path("assets") / "lookup_table.csv"
-    event_log_xes = xes_importer.apply(str(LPlus_LogFile))
-    logM = log_instance.EventLog()
-    logM.append(log_instance.Trace())
+    event_log_xes = pm4py.read_xes(str(LPlus_LogFile), variant="rustxes")
 
-    rules, activities = rules_from_json(str(rules_path))
+
+
+    if rules_path=="":
+        rules= {}
+        activities = {}
+    else:
+        rules, activities = rules_from_json(str(rules_path))
     rules_proccessed, absence_list = preprocess(rules)
 
     event_log_xes = pm4py.filter_event_attribute_values(
@@ -236,7 +246,7 @@ def run_IMr(LPlus_LogFile,rules_path,support):
     print(f"_______________ support is {support}_____________________")
     print('process discovery started')
     start = time.time()
-    net, initial_marking, final_marking = apply_bi(event_log_xes, logM, sup=support, ratio=0, size_par=1,
+    net, initial_marking, final_marking = apply_bi(Lp=event_log_xes, sup=support, ratio=0, size_par=1,
                                                              rules=(rules_proccessed, lookup_table))
     end = time.time()
     print(end - start)
@@ -279,3 +289,24 @@ def run_IMr(LPlus_LogFile,rules_path,support):
     gviz = pn_visualizer.apply(net, initial_marking, final_marking, parameters=parameters)
     gviz.attr("graph", bgcolor="transparent")
     return gviz
+
+
+
+def run_IMr_norule(LPlus_LogFile,support):
+
+    event_log_xes = pm4py.read_xes(LPlus_LogFile, variant="rustxes")
+
+    print(f"_______________ support is {support}_____________________")
+    print('process discovery started')
+    start = time.time()
+    net, initial_marking, final_marking = apply_bi(Lp=event_log_xes, sup=support, ratio=0, size_par=1,
+                                                             rules=({}, {}))
+    end = time.time()
+    print(end - start)
+    print('process discovery ended')
+
+    pm4py.write_pnml(net, initial_marking, final_marking, os.path.join(r"output_files", "model.pnml"))
+
+
+
+    return net, initial_marking, final_marking

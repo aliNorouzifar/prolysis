@@ -1,6 +1,6 @@
 Metadata-Version: 2.2
 Name: prolysis
-Version: 0.1.4
+Version: 0.2.0
 Summary: A Python package for process mining and analysis
 Home-page: https://github.com/aliNorouzifar/prolysis
 Author: Ali Norouzifar
@@ -24,6 +24,7 @@ Requires-Dist: pyemd==1.0.0
 Requires-Dist: redis==5.2.1
 Requires-Dist: numba==0.61.0
 Requires-Dist: pot==0.9.5
+Requires-Dist: rustxes==0.2.6
 Dynamic: author
 Dynamic: author-email
 Dynamic: classifier

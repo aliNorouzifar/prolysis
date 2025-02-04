@@ -2,40 +2,63 @@ import prolysis.discovery.split_functions.split as split
 from prolysis.discovery.candidate_search.search import find_possible_partitions
 from prolysis.discovery.base_case.check import check_base_case
 from prolysis.discovery.cut_quality.cost_functions import cost_functions
-from prolysis.util.functions import generate_nx_graph_from_log, generate_nx_indirect_graph_from_log, read_append_write_json
+from prolysis.util.functions import generate_nx_graph_from_log, generate_nx_indirect_graph_from_log, get_input_output_B_indices
+from prolysis.util.functions import convert_activities_to_array as act2ary
 from prolysis.discovery.cut_quality.cost_functions.cost_functions import overal_cost
+import networkx as nx
+import numpy as np
+from collections import Counter
+
 
 class SubtreePlain(object):
     def __init__(self, logp,logm, rec_depth, noise_threshold= None,
                    parameters=None, sup= None, ratio = None, size_par = None, rules = None):
 
-        nt = 0.000 * logp.total()
+        nt = 0.000 * sum(logp.values())
         self.rec_depth = rec_depth
         self.noise_threshold = noise_threshold
         self.log = logp
-        self.netP = generate_nx_graph_from_log(self.log,nt)
-        if self.log.total()==0:
+
+        if sum(self.log.values())==0:
             self.activitiesP = set()
             self.start_activitiesP = {}
             self.end_activitiesP = {}
         else:
-            self.activitiesP = set(self.netP.nodes()) - {'start', 'end'}
-            self.start_activities = {x:self.netP.get_edge_data('start', x)['weight'] for x in self.netP.successors('start') if x!='end'}
-            self.end_activities = {x: self.netP.get_edge_data(x, 'end')['weight'] for x in self.netP.predecessors('end') if x!='start'}
-        self.logM = logm
-        self.netM = generate_nx_graph_from_log(self.logM,nt)
-        if self.logM.total()==0:
+            self.activitiesP = set(y for x in logp for y in x if x!=())
+            self.start_activities = set(x[0] for x in logp if x!=())
+            self.end_activities = set(x[-1] for x in logp if x!=())
+
+
+        if not logm:
+            self.ignore_M = True
             self.activitiesM = set()
             self.start_activitiesM = {}
             self.end_activitiesM = {}
             self.size_adj = 1
         else:
-            self.activitiesM = set(self.netM.nodes()) - {'start', 'end'}
-            self.start_activitiesM = {x: self.netM.get_edge_data('start', x)['weight'] for x in
-                                      self.netM.successors('start') if x != 'end'}
-            self.end_activitiesM = {x: self.netM.get_edge_data(x, 'end')['weight'] for x in
-                                    self.netM.predecessors('end') if x != 'start'}
-            self.size_adj = self.log.total()/self.logM.total()
+            self.ignore_M = False
+            self.logM = logm
+            self.activitiesM = set(y for x in logm for y in x if x!=())
+            self.start_activitiesM = set(x[0] for x in logm if x!=())
+            self.end_activitiesM = set(x[-1] for x in logm if x!=())
+
+
+        self.netP = generate_nx_graph_from_log(self.log, nt, self.activitiesM)
+        self.all_acts = self.activitiesP.union(self.activitiesM)
+        self.nodes_order = list(self.all_acts - {'start', 'end'})
+        self.nodes_order.append('start')
+        self.nodes_order.append('end')
+        self.mapping = {i: activity for i, activity in enumerate(self.nodes_order)}
+        self.mapping_rev = {v: k for k, v in self.mapping.items()}
+        self.adj_matrixP = nx.to_numpy_array(self.netP, nodelist=self.nodes_order)  # Ensure correct ordering
+        self.adj_dict = {n: set(self.netP.neighbors(n)) for n in self.netP.nodes}
+
+        if logm:
+            self.netM = generate_nx_graph_from_log(self.logM,nt,self.activitiesP)
+            self.adj_matrixM = nx.to_numpy_array(self.netM, nodelist=self.nodes_order)
+            self.size_adj = sum(self.log.values())/sum(self.logM.values())
+
+
         self.original_log = logp
         self.parameters = parameters
         self.detected_cut = None
@@ -49,88 +72,153 @@ class SubtreePlain(object):
             parameters = {}
 
         # check base cases:
-        isbase, cut = check_base_case(self.netP, self.netM,rules , sup, ratio, self)
+        isbase, cut = check_base_case(rules , sup, ratio, self)
 
         if isbase==False:
-            fP = generate_nx_indirect_graph_from_log(self.log)
-            fM = generate_nx_indirect_graph_from_log(self.logM)
+            fP = generate_nx_indirect_graph_from_log(self.log,self.activitiesM)
+            fp_adj = nx.to_numpy_array(fP, nodelist=self.nodes_order[:-2])
+            if not self.ignore_M:
+                fM = generate_nx_indirect_graph_from_log(self.logM,self.activitiesP)
+                fm_adj = nx.to_numpy_array(fM, nodelist=self.nodes_order[:-2])
 
-            possible_partitions,reserve = find_possible_partitions(self.netP,rules,self.start_activities, self.end_activities,fP)
-
+            possible_partitions, reserve2 = find_possible_partitions(rules, self.start_activities,
+                                                                    self.end_activities, fP, self.adj_matrixP, self.nodes_order,self.mapping_rev,self.adj_dict)
 
             cut = []
 
             ratio_backup = ratio
 
+            min_cost = 65534
             for pp in possible_partitions:
                 A = pp[0] - {'start', 'end'}
+                A_np = np.array([self.mapping_rev[s] for s in A], dtype=np.int16)
                 B = pp[1] - {'start', 'end'}
+                B_np = np.array([self.mapping_rev[s] for s in B], dtype=np.int16)
 
-                start_A_P = set(self.start_activities.keys()) & A
-                end_A_P = set(self.end_activities.keys()) & A
-                input_B_P = set([x[1] for x in self.netP.edges if ((x[0] not in B) and (x[1] in B))])
-                output_B_P = set([x[0] for x in self.netP.edges if ((x[0] in B) and (x[1] not in B))])
+                start_A_P = self.start_activities & A
+                end_A_P = self.end_activities & A
+                input_B_P, output_B_P = get_input_output_B_indices(self.adj_matrixP,B_np)
 
-                start_A_M = set(self.start_activitiesM.keys()) & A
-                end_A_M = set(self.end_activitiesM.keys()) & A
-                input_B_M = set([x[1] for x in self.netM.edges if ((x[0] not in B) and (x[1] in B))])
-                output_B_M = set([x[0] for x in self.netM.edges if ((x[0] in B) and (x[1] not in B))])
+                if not self.ignore_M:
+                    start_A_M = self.start_activitiesM & A
+                    end_A_M = self.end_activitiesM & A
+                    input_B_M, output_B_M = get_input_output_B_indices(self.adj_matrixM, B_np)
+                    if sum(self.logM.values()) == 0:
+                        ratio = 0
+                    else:
+                        ratio = ratio_backup
 
                 type = pp[2]
-                if self.logM.total()==0:
-                    ratio = 0
-                else:
-                    ratio = ratio_backup
+
 
                 #####################################################################
                 # seq check
                 if type=="seq":
-                    cost_seq_P_dict = cost_functions.cost_seq(self.netP, A, B, sup, fP)
-                    cost_seq_P = sum(x['missing']+x['deviating'] for x in cost_seq_P_dict.values())
-                    cost_seq_M_dict = cost_functions.cost_seq(self.netM, A.intersection(self.activitiesM), B.intersection(self.activitiesM), sup, fM)
-                    cost_seq_M = sum(x['missing']+x['deviating'] for x in cost_seq_M_dict.values())
-                    cut.append(((A, B), 'seq', cost_seq_P, cost_seq_M, overal_cost(cost_seq_P,cost_seq_M,ratio,self.size_adj),cost_seq_P_dict,cost_seq_M_dict))
+                    min_cost, dev, mis, valid = cost_functions.cost_seq(self.adj_matrixP, A_np,
+                    B_np, sup, fp_adj, min_cost, self.ignore_M)
+                    cost_seq_P_dict = {'missing':mis, 'deviating':dev}
+                    cost_seq_P = mis+dev
+                    if not self.ignore_M:
+                        min_cost, dev, mis, valid = cost_functions.cost_seq(self.adj_matrixM, A_np,
+                                                                  B_np, sup, fm_adj, min_cost, self.ignore_M)
+                        cost_seq_M_dict = {'missing':mis, 'deviating':dev}
+                        cost_seq_M = mis+dev
+                    else:
+                        cost_seq_M = 0
+                        cost_seq_M_dict = {}
+                    if valid:
+                        cut.append(((A, B), 'seq', cost_seq_P, cost_seq_M, overal_cost(cost_seq_P,cost_seq_M,ratio,self.size_adj),cost_seq_P_dict,cost_seq_M_dict))
                 #####################################################################
                 # xor check
                 if type=="exc":
-                    cost_exc_P_dict = cost_functions.cost_exc(self.netP, A, B)
-                    cost_exc_P = sum(x['missing']+x['deviating'] for x in cost_exc_P_dict.values())
-                    cost_exc_M_dict = cost_functions.cost_exc(self.netM, A.intersection(self.activitiesM), B.intersection(self.activitiesM))
-                    cost_exc_M = sum(x['missing']+x['deviating'] for x in cost_exc_M_dict.values())
-                    cut.append(((A, B), 'exc', cost_exc_P, cost_exc_M, overal_cost(cost_exc_P,cost_exc_M,ratio,self.size_adj),cost_exc_P_dict,cost_exc_M_dict))
+                    min_cost, dev, valid = cost_functions.cost_exc(self.adj_matrixP, A_np,
+                     B_np,min_cost, self.ignore_M)
+                    cost_exc_P_dict = {'missing':0, 'deviating':dev}
+                    cost_exc_P = dev
+
+                    if not self.ignore_M:
+                        min_cost, dev, valid = cost_functions.cost_exc(self.adj_matrixM,A_np,
+                                                                  B_np, min_cost, self.ignore_M)
+                        cost_exc_M_dict = {'missing':0, 'deviating':dev}
+                        cost_exc_M = dev
+                    else:
+                        cost_exc_M_dict = {}
+                        cost_exc_M = 0
+                    if valid:
+                        cut.append(((A, B), 'exc', cost_exc_P, cost_exc_M, overal_cost(cost_exc_P,cost_exc_M,ratio,self.size_adj),cost_exc_P_dict,cost_exc_M_dict))
                 #####################################################################
                 # xor-tau check
                 if type=="exc_tau":
-                    cost_exc_tau_P_dict = cost_functions.cost_exc_tau(self.netP, sup)
-                    cost_exc_tau_P = sum(x['missing']+x['deviating'] for x in cost_exc_tau_P_dict.values())
-                    cost_exc_tau_M_dict = cost_functions.cost_exc_tau(self.netM, sup)
-                    cost_exc_tau_M = sum(x['missing']+x['deviating'] for x in cost_exc_tau_M_dict.values())
+                    mis = cost_functions.cost_exc_tau(self.adj_matrixP,sup,self.mapping_rev['start'],self.mapping_rev['end'])
+                    cost_exc_tau_P_dict = {'missing':mis, 'deviating':0}
+                    cost_exc_tau_P = mis
+                    if not self.ignore_M:
+                        mis = cost_functions.cost_exc_tau(self.adj_matrixM, sup,self.mapping_rev['start'],self.mapping_rev['end'])
+                        cost_exc_tau_M_dict = {'missing':mis, 'deviating':0}
+                        cost_exc_tau_M = mis
+                    else:
+                        cost_exc_tau_M_dict = {}
+                        cost_exc_tau_M = 0
                     cut.append(((A.union(B), set()), 'exc_tau',cost_exc_tau_P , cost_exc_tau_M, overal_cost(cost_exc_tau_P,cost_exc_tau_M,ratio,self.size_adj),cost_exc_tau_P_dict,cost_exc_tau_M_dict))
                 #####################################################################
                 # parallel check
                 if type=="par":
-                    cost_par_P_dict = cost_functions.cost_par(self.netP, A, B,sup)
-                    cost_par_P = sum(x['missing']+x['deviating'] for x in cost_par_P_dict.values())
-                    cost_par_M_dict = cost_functions.cost_par(self.netM, A.intersection(self.activitiesM), B.intersection(self.activitiesM), sup)
-                    cost_par_M = sum(x['missing']+x['deviating'] for x in cost_par_M_dict.values())
-                    cut.append(((A, B), 'par', cost_par_P, cost_par_M, overal_cost(cost_par_P,cost_par_M,ratio,self.size_adj),cost_par_P_dict,cost_par_M_dict))
+                    min_cost, mis, valid = cost_functions.cost_par(self.adj_matrixP, A_np,
+                     B_np, sup, min_cost,self.ignore_M)
+                    cost_par_P_dict = {'missing':mis, 'deviating':0}
+                    cost_par_P = mis
+                    if not self.ignore_M:
+                        min_cost, mis, valid = cost_functions.cost_par(self.adj_matrixM, A_np,
+                                                                  B_np, sup, min_cost,self.ignore_M)
+                        cost_par_M_dict = {'missing':mis, 'deviating':0}
+                        cost_par_M = mis
+                    else:
+                        cost_par_M_dict = {}
+                        cost_par_M = 0
+                    if valid:
+                        cut.append(((A, B), 'par', cost_par_P, cost_par_M, overal_cost(cost_par_P,cost_par_M,ratio,self.size_adj),cost_par_P_dict,cost_par_M_dict))
                 #####################################################################
                 # loop check
                 if type=="loop":
-                    cost_loop_P_dict = cost_functions.cost_loop(self.netP, A, B, sup, start_A_P, end_A_P, input_B_P,output_B_P,self.start_activities,self.end_activities)
-                    cost_loop_P = sum(x['missing']+x['deviating'] for x in cost_loop_P_dict.values())
-                    # if cost_loop_P==0:
-                    #     print('wait')
-                    cost_loop_M_dict = cost_functions.cost_loop(self.netM, A, B, sup, start_A_M, end_A_M, input_B_M,output_B_M,self.start_activitiesM,self.end_activitiesM)
-                    cost_loop_M = sum(x['missing']+x['deviating'] for x in cost_loop_M_dict.values())
-                    cut.append(((A, B), 'loop', cost_loop_P, cost_loop_M, overal_cost(cost_loop_P,cost_loop_M,ratio,self.size_adj),cost_loop_P_dict,cost_loop_M_dict))
+                    min_cost,dev, mis, valid = cost_functions.cost_loop(self.adj_matrixP, A_np, B_np, sup,
+                                                                   act2ary(start_A_P, self.mapping_rev), act2ary(end_A_P, self.mapping_rev), input_B_P,
+                                                                   output_B_P,self.mapping_rev['start'],self.mapping_rev['end'],min_cost,self.ignore_M)
+
+                    cost_loop_P_dict = {'missing':mis, 'deviating':dev}
+                    cost_loop_P = mis+dev
+                    if not self.ignore_M:
+                        min_cost,dev, mis, valid = cost_functions.cost_loop(self.adj_matrixM,
+                                                                       A_np,
+                                                                       B_np,
+                                                                       sup,
+                                                                       act2ary(start_A_M,
+                                                                                                   self.mapping_rev),
+                                                                       act2ary(end_A_M,
+                                                                                                   self.mapping_rev),
+                                                                       input_B_M,
+                                                                       output_B_M,
+                                                                       self.mapping_rev['start'], self.mapping_rev['end'],min_cost,self.ignore_M)
+                        cost_loop_M_dict = {'missing':mis, 'deviating':dev}
+                        cost_loop_M = mis+dev
+                    else:
+                        cost_loop_M_dict = {}
+                        cost_loop_M = 0
+
+                    if valid:
+                        cut.append(((A, B), 'loop', cost_loop_P, cost_loop_M, overal_cost(cost_loop_P,cost_loop_M,ratio,self.size_adj),cost_loop_P_dict,cost_loop_M_dict))
 
                 if type=="loop_tau":
-                    cost_loop_P_dict = cost_functions.cost_loop_tau(self.netP, sup, self.start_activities,self.end_activities)
-                    cost_loop_P = sum(x['missing']+x['deviating'] for x in cost_loop_P_dict.values())
-                    cost_loop_M_dict = cost_functions.cost_loop_tau(self.netM, sup, self.start_activitiesM,self.end_activitiesM)
-                    cost_loop_M = sum(x['missing']+x['deviating'] for x in cost_loop_M_dict.values())
-                    cut.append(((set(self.start_activities.keys()), set(self.end_activities.keys())), 'loop_tau', cost_loop_P,cost_loop_M, overal_cost(cost_loop_P,cost_loop_M,ratio,self.size_adj), cost_loop_P_dict,cost_loop_M_dict))
+                    mis = cost_functions.cost_loop_tau(self.adj_matrixP, sup, act2ary(start_A_P, self.mapping_rev),act2ary(end_A_P, self.mapping_rev),self.mapping_rev['start'],self.mapping_rev['end'])
+                    cost_loop_P_dict = {'missing':mis, 'deviating': 0 }
+                    cost_loop_P = mis
+                    if not self.ignore_M:
+                        mis = cost_functions.cost_loop_tau(self.adj_matrixM, sup, act2ary(start_A_M, self.mapping_rev),act2ary(end_A_M, self.mapping_rev),self.mapping_rev['start'],self.mapping_rev['end'])
+                        cost_loop_M_dict = {'missing':mis, 'deviating': 0 }
+                        cost_loop_M = mis
+                    else:
+                        cost_loop_M_dict = {}
+                        cost_loop_M = 0
+                    cut.append(((self.start_activities, self.end_activities), 'loop_tau', cost_loop_P,cost_loop_M, overal_cost(cost_loop_P,cost_loop_M,ratio,self.size_adj), cost_loop_P_dict,cost_loop_M_dict))
 
 
             if not cut:
@@ -143,24 +231,16 @@ class SubtreePlain(object):
         map_cut_op = {'par': 'parallel', 'seq': 'sequential', 'exc': 'xor', 'exc_tau':'xor', 'exc2': 'xor',
                       'loop': 'loopCut', 'loop1': 'loopCut', 'loop_tau': 'loopCut'}
 
-        if cut[1] in {'par','seq','exc','exc_tau','exc2','loop','loop_tau', 'single_activity'}:
-            # updates = {'cut_type':cut[1],'set1':list(cut[0][0]), 'set2':list(cut[0][1]), 'cost+:':cut[2], 'cost-':ratio*self.size_adj*cut[3], 'contribusions+':{x:cut[5][x] for x in cut[5] if cut[5][x]>0} , 'contributions-':{x:(ratio*self.size_adj*cut[6][x]) for x in cut[6] if cut[6][x]>0},'overal_cost':cut[4]}
-            updates = {'cut_type': cut[1], 'set1': list(cut[0][0]), 'set2': list(cut[0][1]), 'cost+:': cut[2],
-                       'cost-': ratio * self.size_adj * cut[3],
-                       'contribusions+': {x: {'deviating': cut[5][x]['deviating'], 'missing': cut[5][x]['missing']} for
-                                          x in cut[5] if (cut[5][x]['missing'] > 0 or cut[5][x]['deviating'])},
-                       'contributions-': {x: {'deviating': ratio * self.size_adj * cut[6][x]['deviating'],
-                                              'missing': ratio * self.size_adj * cut[6][x]['missing']} for x in cut[6]
-                                          if (cut[6][x]['missing'] > 0 or cut[6][x]['deviating'])},
-                       'overal_cost': cut[4]}
-            file_path = f'E:\\PADS\Projects\\IMbi_paper_revision\\experiments\\models\\data_s{int(10*sup)}_r{int(10*ratio)}.json'
-            # read_append_write_json(file_path, updates)
 
 
         if cut[1] in map_cut_op.keys():
             self.detected_cut = map_cut_op[cut[1]]
             LAP, LBP = split.split(cut[1], [cut[0][0], cut[0][1]], self.log)
-            LAM, LBM = split.split(cut[1], [cut[0][0], cut[0][1]], self.logM)
+            if not self.ignore_M:
+                LAM, LBM = split.split(cut[1], [cut[0][0], cut[0][1]], self.logM)
+            else:
+                LAM = Counter()
+                LBM = Counter()
             new_logs = [[LAP, LAM], [LBP, LBM]]
             for l in new_logs:
                 self.children.append(

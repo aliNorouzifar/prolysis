@@ -1,108 +1,187 @@
-from prolysis.util.functions import n_edges,get_edge_weight, aggregate_dictionaries
+from prolysis.util.functions import sum_out_degree_numba, sum_out_degree_single, get_edge_weight_numba, n_edges_numba
+from numba import njit
+import numpy as np
 
 
-def cost_seq(net, A, B, sup, flow):
-    c1 = {}
-    c2 = {}
-    sum_out_degrees_A = sum(net.out_degree(p, weight='weight') for p in A)
-    sum_out_degrees_B = sum(net.out_degree(p, weight='weight') for p in B)
+
+# @njit
+def cost_seq(adj, A_indices, B_indices, sup, flow,min_cost,flag):
+    # Compute total out-degree sums
+    sum_out_degrees_A = sum_out_degree_numba(adj, A_indices)
+    sum_out_degrees_B = sum_out_degree_numba(adj, B_indices)
     sum_out_degrees_total = sum_out_degrees_A + sum_out_degrees_B
 
-    for x in A:
-        for y in B:
-            c1[f'({y}, {x})'] = c1.get(f'({y}, {x})', 0) + get_edge_weight(net, y, x)
-            out_degree_x = net.out_degree(x, weight='weight')
-            out_degree_y = net.out_degree(y, weight='weight')
-            c2[f'({x}, {y})'] = c2.get(f'({x}, {y})', 0) + max(0, out_degree_x * sup * (out_degree_y / sum_out_degrees_total) - get_edge_weight(flow, x, y))
-    return aggregate_dictionaries([c1],[c2])
+    # Preallocate fixed-size storage for efficiency
+    dev = 0
+    mis = 0
+
+    # Compute c1 and c2
+    for i, x_idx in enumerate(A_indices):
+        for j, y_idx in enumerate(B_indices):
+            dev += get_edge_weight_numba(adj, y_idx, x_idx)
+
+            if flag and dev> min_cost:
+                return min_cost, dev, mis, False
+
+            out_degree_x = sum_out_degree_single(adj, x_idx)
+            out_degree_y = sum_out_degree_single(adj, y_idx)
+
+            if sum_out_degrees_total > 0:
+                mis += max(0, out_degree_x * sup * (out_degree_y / sum_out_degrees_total) -
+                               get_edge_weight_numba(flow, x_idx, y_idx))
+                if flag and dev > min_cost:
+                    return min_cost, dev, mis, False
+    if flag and dev < min_cost:
+        min_cost = dev+mis
+
+    return min_cost, dev, mis, True
 
 
-def cost_exc(net, A, B):
-    c1 = {}
-    for x in A:
-        for y in B:
-            c1[f'({x}, {y})'] = c1.get(f'({x}, {y})', 0) + get_edge_weight(net, x, y)
-            c1[f'({y}, {x})'] = c1.get(f'({y}, {x})', 0) + get_edge_weight(net, y, x)
-    return aggregate_dictionaries([c1],[{}])
+# @njit
+def cost_exc(adj, A_indices, B_indices,min_cost, flag):
+    # Preallocate fixed-size storage for efficiency
+    dev = 0
+
+    # Compute c1
+    for i, x_idx in enumerate(A_indices):
+        for j, y_idx in enumerate(B_indices):
+            dev += get_edge_weight_numba(adj, x_idx, y_idx)
+            dev += get_edge_weight_numba(adj, y_idx, x_idx)
+            if flag and dev > min_cost:
+                return min_cost, dev, False
+    if flag and dev < min_cost:
+        min_cost = dev
+
+    return min_cost, dev, True
 
 
 
-def cost_exc_tau(net, sup):
-    c = {}
-    if 'start' in net.nodes():
-        c['xor_tau'] = max(0, sup * net.out_degree('start', weight='weight') - get_edge_weight(net,'start','end'))
-    return aggregate_dictionaries([c],[{}])
+def cost_exc_tau(adj, sup,start_index, end_index):
+    # c = {}
+    # if 'start' in net.nodes():
+    mis = max(0, sup * sum_out_degree_single(adj, start_index) - get_edge_weight_numba(adj, start_index, end_index))
+    return mis
 
 
-def cost_par(net, A, B, sup):
-    c1 = {}
-    c2 = {}
 
-    sum_out_degrees_A = sum(net.out_degree(p, weight='weight') for p in A)
-    sum_out_degrees_B = sum(net.out_degree(p, weight='weight') for p in B)
+# @njit
+def cost_par(adj, A_indices, B_indices, sup,min_cost, flag):
+    # Compute total out-degree sums
+    sum_out_degrees_A = sum_out_degree_numba(adj, A_indices)
+    sum_out_degrees_B = sum_out_degree_numba(adj, B_indices)
     sum_out_degrees_total = sum_out_degrees_A + sum_out_degrees_B
 
-    for a in A:
-        out_degree_a = net.out_degree(a, weight='weight')
-        for b in B:
-            out_degree_b = net.out_degree(b, weight='weight')
+    # Preallocate fixed-size storage for efficiency
+    mis = 0
 
-            c1[f'({a}, {b})'] = c1.get(f'({a}, {b})', 0) + max(0,(out_degree_a * sup * out_degree_b) / sum_out_degrees_total - get_edge_weight(net, a, b))
-            c2[f'({b}, {a})'] = c2.get(f'({b}, {a})', 0) + max(0,(out_degree_b * sup * out_degree_a) / sum_out_degrees_total - get_edge_weight(net, b, a))
+    # Compute c1 and c2
+    for i, a_idx in enumerate(A_indices):
+        out_degree_a = sum_out_degree_single(adj, a_idx)
+        for j, b_idx in enumerate(B_indices):
+            out_degree_b = sum_out_degree_single(adj, b_idx)
 
-    return aggregate_dictionaries([{}],[c1,c2])
+            if sum_out_degrees_total > 0:
+                mis += max(0, (out_degree_a * sup * out_degree_b) / sum_out_degrees_total -
+                               get_edge_weight_numba(adj, a_idx, b_idx))
+                mis += max(0, (out_degree_b * sup * out_degree_a) / sum_out_degrees_total -
+                               get_edge_weight_numba(adj, b_idx, a_idx))
+                if flag and mis > min_cost:
+                    return min_cost, mis, False
+    if flag and mis < min_cost:
+        min_cost = mis
 
-
-def cost_loop(net, A, B, sup, start_A, end_A, input_B, output_B, start_activities, end_activities):
-    M_P = max(n_edges(net,output_B,start_A), n_edges(net,end_A,input_B))
-    c1 = {}
-    c2 = {}
-    c3 = {}
-    c4 = {}
-    c5 = {}
-
-    for x in B:
-        c1[f'(start,{x})'] = c1.get(f'(start,{x})', 0) + get_edge_weight(net, 'start', x)
-        c1[f'({x}, end)'] = c1.get(f'({x}, end)', 0) + get_edge_weight(net, x, 'end')
-        for y in A - end_A:
-            c2[f'({y},{x})'] = c2.get(f'({y},{x})', 0) + get_edge_weight(net, y, x)
-        for y in A - start_A:
-            c3[f'({x},{y})'] = c3.get(f'({x},{y})', 0) + get_edge_weight(net, x, y)
+    return min_cost, mis, True
 
 
-    if n_edges(net, output_B, start_A):
-        # c4 = 0
-        for a in start_A:
-            for b in output_B:
-                c4[f'({b},{a})'] = c4.get(f'({b},{a})', 0) + max(0, M_P * sup * (n_edges(net,{'start'},{a})/n_edges(net, {'start'}, start_A)) * (n_edges(net, {b}, start_A)/ n_edges(net, output_B, start_A))- get_edge_weight(net, b, a))
+# @njit
+def cost_loop(adj, A_indices, B_indices, sup, start_A_indices, end_A_indices, input_B_indices, output_B_indices, start_index, end_index,min_cost,flag):
+    M_P = max(n_edges_numba(adj, output_B_indices, start_A_indices),
+              n_edges_numba(adj, end_A_indices, input_B_indices))
+
+    dev_cost = 0
+    mis_cost = 0
+
+    # Compute c1, c2, c3
+    for x_idx in B_indices:
+        dev_cost += get_edge_weight_numba(adj, start_index, x_idx) + get_edge_weight_numba(adj, x_idx, end_index)
+        if flag and dev_cost > min_cost:
+            return min_cost, dev_cost, mis_cost, False
+
+        for y_idx in A_indices:
+            if y_idx not in end_A_indices:
+                dev_cost += get_edge_weight_numba(adj, y_idx, x_idx)
+                if flag and dev_cost > min_cost:
+                    return min_cost, dev_cost, mis_cost, False
+
+            if y_idx not in start_A_indices:
+                dev_cost += get_edge_weight_numba(adj, x_idx, y_idx)
+
+            if flag and dev_cost > min_cost:
+                    return min_cost, dev_cost, mis_cost, False
+
+    # Compute c4 (Avoid np.array inside loops)
+    if n_edges_numba(adj, output_B_indices, start_A_indices) > 0:
+        for a_idx in start_A_indices:
+            for b_idx in output_B_indices:
+                start_edges = n_edges_numba(adj, np.array([start_index]), np.array([a_idx]))
+                total_start_edges = n_edges_numba(adj, np.array([start_index]), start_A_indices)
+                output_edges = n_edges_numba(adj, np.array([b_idx]), start_A_indices)
+                total_output_edges = n_edges_numba(adj, output_B_indices, start_A_indices)
+
+                if total_start_edges > 0 and total_output_edges > 0:
+                    mis_cost += max(0, M_P * sup * (start_edges / total_start_edges) *
+                                    (output_edges / total_output_edges) -
+                                    get_edge_weight_numba(adj, b_idx, a_idx))
+
+                if flag and dev_cost + mis_cost > min_cost:
+                    return min_cost, dev_cost, mis_cost, False
     else:
-        c4['no_edge'] = c4.get('no_edge', 0) + M_P * sup
+        mis_cost += M_P * sup
 
-    if n_edges(net, end_A, input_B):
-        # c5 = 0
-        for a in end_A:
-            for b in input_B:
-               c5[f'({a},{b})'] = c5.get(f'({a},{b})', 0) + max(0, M_P * sup * (n_edges(net,{a}, {'end'})/n_edges(net, end_A, {'end'})) * (n_edges(net, end_A, {b})/ n_edges(net, end_A, input_B))- get_edge_weight(net, a, b))
+    # Compute c5 (Avoid np.array inside loops)
+    if n_edges_numba(adj, end_A_indices, input_B_indices) > 0:
+        for a_idx in end_A_indices:
+            for b_idx in input_B_indices:
+                end_edges = n_edges_numba(adj, np.array([a_idx]), np.array([end_index]))
+                total_end_edges = n_edges_numba(adj, end_A_indices, np.array([end_index]))
+                input_edges = n_edges_numba(adj, end_A_indices, np.array([b_idx]))
+                total_input_edges = n_edges_numba(adj, end_A_indices, input_B_indices)
+
+                if total_end_edges > 0 and total_input_edges > 0:
+                    mis_cost += max(0, M_P * sup * (end_edges / total_end_edges) *
+                                    (input_edges / total_input_edges) -
+                                    get_edge_weight_numba(adj, a_idx, b_idx))
+
+                if flag and dev_cost + mis_cost > min_cost:
+                    return min_cost, dev_cost, mis_cost, False
     else:
-        c5['no_edge'] = c5.get('no_edge', 0) + M_P * sup
+        mis_cost += M_P * sup
 
-    return aggregate_dictionaries([c1,c2,c3],[c4,c5])
+    if flag and dev_cost + mis_cost < min_cost:
+        min_cost = dev_cost + mis_cost
+    return min_cost,dev_cost, mis_cost, True
 
 
-def cost_loop_tau(net, sup, start_activities, end_activities):
-    c = {}
-    M_P = n_edges(net,set(end_activities.keys()),set(start_activities.keys()))
-    start_sum = sum(start_activities.values())
-    end_sum = sum(end_activities.values())
 
-    for x in start_activities:
-        for y in end_activities:
-            if (y, x) in net.edges:
-                c[f'({y},{x})'] = c.get(f'({y},{x})',0) + max(0, M_P * sup * (start_activities[x] / start_sum) * (end_activities[y] / end_sum) - get_edge_weight(net, y, x))
+
+def cost_loop_tau(adj, sup, start_A_indices, end_A_indices,start_index, end_index):
+    M_P = n_edges_numba(adj, end_A_indices, start_A_indices)
+
+
+    start_sum = n_edges_numba(adj, np.array([start_index]), start_A_indices)
+    end_sum = n_edges_numba(adj, end_A_indices, np.array([end_index]))
+    mis_cost = 0
+
+    for a_idx in start_A_indices:
+        for b_idx in end_A_indices:
+            if adj[b_idx,a_idx]>0:
+                mis_cost += max(0, M_P * sup * (get_edge_weight_numba(adj,start_index,a_idx)/ start_sum)*
+                                (get_edge_weight_numba(adj, b_idx, end_index)/ end_sum) -
+                                get_edge_weight_numba(adj, b_idx, a_idx))
             else:
-                c[f'({y},{x})'] = c.get(f'({y},{x})',0) +M_P * sup * (start_activities[x] / start_sum) * (end_activities[y] / end_sum)
+                mis_cost +=  M_P * sup * (get_edge_weight_numba(adj, start_index, a_idx) / start_sum) * (get_edge_weight_numba(adj, b_idx, end_index) / end_sum)
+    return mis_cost
 
-    return aggregate_dictionaries([{}],[c])
 
 def overal_cost(costP,costM,ratio, size_par):
     ov_c= costP - ratio * size_par * costM

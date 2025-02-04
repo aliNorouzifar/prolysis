@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="prolysis",
     license="CC BY-NC 4.0",
-    version="0.1.4",
+    version="0.2.0",
     packages=find_packages(),
     install_requires=[
     "automata-lib ==8.4.0",
@@ -21,6 +21,7 @@ setup(
     "redis==5.2.1",
     "numba==0.61.0",
     "pot==0.9.5",
+    "rustxes==0.2.6"
     ],
     author="Ali Norouzifar",
     author_email="ali.norouzifar@pads.rwth-aachen.de",

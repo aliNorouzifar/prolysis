@@ -1,33 +1,22 @@
-from prolysis.util.functions import n_edges
-from prolysis.util.functions import add_SE
+from prolysis.util.functions import add_SE, select_submatrix, bfs_descendants, bfs_ancestors, get_edge_weight_numba, n_edges_numba, convert_activities_to_array
 from prolysis.discovery.candidate_search.is_allowed_2 import is_allowed
-import networkx as nx
+import numpy as np
 
 
-def adj(node_set, net,n_thr):
-    adj_set = set()
-    for node in node_set:
-        if len(set(net.neighbors(node)))>0:
-            max_out = max([n_edges(net, {node}, {x}) for x in net.neighbors(node)])
-            filt_num = max_out * n_thr
-            adj_set = adj_set.union(set([x for x in net.neighbors(node) if n_edges(net, {node}, {x})>=filt_num]))
-        else:
-            adj_set = adj_set.union(set(net.neighbors(node)))
-    return adj_set
-
-
-def find_possible_partitions(net, rules, st_net, en_net,fp):
-    activity_list = set(net.nodes) - {'start', 'end'}
+def find_possible_partitions(rules, st_net, en_net,fp, adj_matrix,nodes_order,mapping,adj_dict):
+    # activity_list = set(net.nodes) - {'start', 'end'}
+    activity_list = set(mapping.keys()) - {'start', 'end'}
     queue = [(set(), {'start'})]
     visited = set()
-    # valid = []
     reserve = []
+
+    nodes_order_np = np.array([mapping[s] for s in nodes_order], dtype=np.int16)
 
     block = False
 
     lowest_cost = 10000
-    if n_edges(net, {'start'}, {'end'}) > 0:
-        # na, block, exclude_dic = is_allowed(activity_list, set(), rules, st_net, en_net)
+
+    if get_edge_weight_numba(adj_matrix, mapping['start'], mapping['end']) > 0:
         if len(rules[1]) > 0:
             na, block, penalty,lowest_cost = is_allowed(activity_list, set(), rules,{'exc_tau'},lowest_cost)
         else:
@@ -36,13 +25,8 @@ def find_possible_partitions(net, rules, st_net, en_net,fp):
         possible_cuts = {'exc_tau'} - na
         reserve += [(activity_list, set(), ct, penalty[ct]) for ct in possible_cuts]
 
-        # if 'exc_tau' not in na:
-        #     valid.append((activity_list, set(), {'exc_tau'}))
-        # else:
-        #     reserve.append(((activity_list, set(), {'exc_tau'}), 'exc_tau', sum([y[2] for y in exclude_dic['exc_tau']])))
 
-    if (n_edges(net, set(en_net.keys()), set(st_net.keys())) > 0) and set(st_net.keys())==set([x for x in st_net.keys() if (x,x) in fp.edges() and fp[x][x]['weight'] > 0]):
-        # na, block, exclude_dic = is_allowed(activity_list, set(), rules, st_net, en_net)
+    if (n_edges_numba(adj_matrix, convert_activities_to_array(en_net,mapping), convert_activities_to_array(st_net,mapping)) > 0) and st_net==set([x for x in st_net if (x,x) in fp.edges() and fp[x][x]['weight'] > 0]):
         if len(rules[1]) > 0:
             na, block, penalty,lowest_cost = is_allowed(activity_list, set(), rules,{'loop_tau'},lowest_cost)
         else:
@@ -51,10 +35,6 @@ def find_possible_partitions(net, rules, st_net, en_net,fp):
         possible_cuts = {'loop_tau'} - na
         reserve += [(activity_list, set(), ct, penalty[ct]) for ct in possible_cuts]
 
-        # if 'loop_tau' not in na:
-        #     valid.append((activity_list, set(), {'loop_tau'}))
-        # else:
-        #     reserve.append(((activity_list, set(), {'loop_tau'}), 'loop_tau', sum([y[2] for y in exclude_dic['loop_tau']])))
 
     while len(queue) != 0:
         current = queue.pop()
@@ -65,63 +45,64 @@ def find_possible_partitions(net, rules, st_net, en_net,fp):
             new_state = add_SE(new_state, st_net, en_net)
 
             if frozenset(new_state) not in visited:
-                new_adj = (current_adj | adj({x}, net,0)) - new_state
+                new_adj = (current_adj | adj_dict[x]) - new_state
+
                 visited.add(frozenset(new_state))
-                # possible_cuts = set()
 
                 B = activity_list - new_state
-                # na, block, exclude_dic = is_allowed(new_state, B, rules, st_net, en_net)
 
                 if (len(B) == 0) or (len(B) == len(activity_list)):
                     queue.append((new_state, new_adj))
                     continue
 
                 B = add_SE(B,st_net,en_net)
-                netA = net.subgraph(new_state)
-                netB = net.subgraph(B)
+                new_state_np = np.array([mapping[s] for s in new_state], dtype=np.int16)
+                B_np = np.array([mapping[s] for s in B], dtype=np.int16)
+
+                adj_A = select_submatrix(adj_matrix, nodes_order_np, new_state_np)
+                adj_B = select_submatrix(adj_matrix, nodes_order_np, B_np)
+
 
                 # 'start' ~> netB
-                if 'start' in netB:
-                    not2startB = set(netB.nodes) - set(nx.descendants(netB, 'start')) - {'start', 'end'}
+                if 'start' in B:
+                    descendants = bfs_descendants(adj_B, np.where(B_np==mapping['start'])[0][0])
+                    start2B = (descendants.shape[0] == (B_np.shape[0]-1))
                 else:
-                    not2startB = set(netB.nodes) - {'start', 'end'}
+                    start2B = False
                 # 'end' ~> netA
-                if 'end' in netA:
-                    not2endA = set(netA.nodes) - set(nx.ancestors(netA, 'end')) - {'start', 'end'}
+                if 'end' in new_state:
+                    ancestors = bfs_ancestors(adj_A, np.where(new_state_np==mapping['end'])[0][0])
+                    A2end = (ancestors.shape[0] == (new_state_np.shape[0]-1))
                 else:
-                    not2endA = set(netA.nodes) - {'start', 'end'}
+                    A2end = False
+
                 # 'end' ~> netB
-                if 'end' in netB:
-                    not2endB = set(netB.nodes) - set(nx.ancestors(netB, 'end')) - {'start', 'end'}
+                if 'end' in B:
+                    ancestors = bfs_ancestors(adj_B, np.where(B_np==mapping['end'])[0][0])
+                    B2end = (ancestors.shape[0] == (B_np.shape[0] - 1))
                 else:
-                    not2endB = set(netB.nodes) - {'start', 'end'}
+                    B2end = False
 
 
                 possible_cuts = set()
-                if not not2endB:
+                if B2end:
                     possible_cuts.add("seq")
-                    if len(not2endA) == 0:
-                        if n_edges(net, B-{'start','end'}, new_state & set(st_net.keys())) != 0 and n_edges(net, new_state & set(en_net.keys()), B-{'start','end'}) != 0:
+                    if A2end:
+                        if n_edges_numba(adj_matrix, convert_activities_to_array(B-{'start','end'}, mapping), convert_activities_to_array(new_state & st_net, mapping)) != 0 and n_edges_numba(adj_matrix,convert_activities_to_array(new_state & en_net,mapping), convert_activities_to_array(B-{'start','end'},mapping)) != 0:
                                 possible_cuts.add("loop")
-                        if len(not2startB) == 0 and (B not in visited):
+                        if start2B and (B not in visited):
                             possible_cuts.update(["exc", "par"])
-                elif not not2endA:
-                    if n_edges(net, B, new_state & set(st_net.keys())) != 0 and n_edges(net,new_state & set(en_net.keys()),B) != 0:
+                elif A2end:
+                    if n_edges_numba(adj_matrix, convert_activities_to_array(B,mapping), convert_activities_to_array(new_state & st_net,mapping)) != 0 and n_edges_numba(adj_matrix, convert_activities_to_array(new_state & en_net,mapping),convert_activities_to_array(B,mapping)) != 0:
                             possible_cuts.add("loop")
-                # for x in possible_cuts:
-                #     if x in na:
-                #         reserve.append(((new_state, B, possible_cuts),x, sum([y[2] for y in exclude_dic[x]])))
-                # possible_cuts = possible_cuts - na
+
                 if possible_cuts:
                     if len(rules[1]) > 0:
                         na, block, penalty,lowest_cost = is_allowed(new_state, B, rules,possible_cuts,lowest_cost)
                     else:
-                        na = set()
                         penalty = {'seq': 0, 'exc': 0, 'par': 0, 'loop': 0, 'loop_tau': 0, 'exc_tau': 0}
                     reserve += [(new_state, B, ct, penalty[ct]) for ct in possible_cuts]
-                # possible_cuts = possible_cuts - na
-                # if len(possible_cuts) > 0:
-                #     valid.append((new_state, B, possible_cuts))
+
 
                 if not block:
                     queue.append((new_state, new_adj))
