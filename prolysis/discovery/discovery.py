@@ -251,9 +251,6 @@ def run_IMr(LPlus_LogFile,support,rules, activities,dim,abs_thr):
         print(end - start)
         print('process discovery ended')
 
-        pm4py.write_pnml(net, initial_marking, final_marking, os.path.join(r"output_files", "model.pnml"))
-
-
 
         print('model_checking started')
         rg = construct_reachability_graph(net, initial_marking, use_trans_name=False, parameters=None)
@@ -292,7 +289,7 @@ def run_IMr(LPlus_LogFile,support,rules, activities,dim,abs_thr):
         net, initial_marking, final_marking = apply_bi(Lp=event_log_xes, sup=support, ratio=0, size_par=1,
                                                        rules=([], [], ""))
 
-
+    pm4py.write_pnml(net, initial_marking, final_marking, os.path.join(r"output_files", "model.pnml"))
     parameters = {pn_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT: "png"}
     gviz = pn_visualizer.apply(net, initial_marking, final_marking, parameters=parameters)
     gviz.attr("graph", bgcolor="transparent")

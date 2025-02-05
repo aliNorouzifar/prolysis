@@ -46,8 +46,9 @@ class SubtreePlain(object):
         self.netP = generate_nx_graph_from_log(self.log, nt, self.activitiesM)
         self.all_acts = self.activitiesP.union(self.activitiesM)
         self.nodes_order = list(self.all_acts - {'start', 'end'})
-        self.nodes_order.append('start')
-        self.nodes_order.append('end')
+        if 'start' in self.netP.nodes and 'end' in self.netP.nodes:
+            self.nodes_order.append('start')
+            self.nodes_order.append('end')
         self.mapping = {i: activity for i, activity in enumerate(self.nodes_order)}
         self.mapping_rev = {v: k for k, v in self.mapping.items()}
         self.adj_matrixP = nx.to_numpy_array(self.netP, nodelist=self.nodes_order)  # Ensure correct ordering
@@ -84,6 +85,7 @@ class SubtreePlain(object):
             possible_partitions, reserve2 = find_possible_partitions(rules, self.start_activities,
                                                                     self.end_activities, fP, self.adj_matrixP, self.nodes_order,self.mapping_rev,self.adj_dict)
 
+            # print(len(possible_partitions))
             cut = []
 
             ratio_backup = ratio
@@ -225,6 +227,7 @@ class SubtreePlain(object):
                 print("no good cut exists")
             sorted_cuts = sorted(cut, key=lambda x: (x[4], x[2],['exc_tau','exc','seq','par','loop','loop_tau'].index(x[1]), abs(len(x[0][0])-len(x[0][1]))))
             cut = sorted_cuts[0]
+            # print(len(sorted_cuts))
 
         # print(cut[:-2])
 

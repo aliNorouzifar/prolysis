@@ -288,14 +288,14 @@ def export_logs(segments_ids):
     event_file = "output_files/out_event.csv"
     event_table = pd.read_csv(event_file)
 
-    os.makedirs("event_logs/exported_logs", exist_ok=True)
+    os.makedirs("output_files/", exist_ok=True)
     for idx, segment_id_set in enumerate(segments_ids, start=1):
         segment_cases = case_table.loc[segment_id_set, 'case_id']
         segment_log = event_table[event_table['case_id'].isin(segment_cases)]
         segment_log = pm4py.format_dataframe(segment_log, case_id="case_id", activity_key="activity_name",
                                              timestamp_key="timestamp")
         event_log = pm4py.convert_to_event_log(segment_log)
-        pm4py.write_xes(event_log, f"event_logs/exported_logs/segment_{idx}.xes")
+        pm4py.write_xes(event_log, f"output_files/segment_{idx}.xes")
 
 
 
