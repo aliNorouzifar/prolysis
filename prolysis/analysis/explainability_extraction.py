@@ -45,6 +45,28 @@ def export_constraints_per_cluster(constraints, constraints_json_path):
         json.dump(dict_out, fp)
         fp.close()
 
+def export_constraints_all_cluster(data_str,constraints_json_path,N_segment):
+    for i in range(1,N_segment+1):
+        dict_out = {}
+        dict_out["tasks"] = json.loads(redis_client.get("tasks"))
+        dict_out["constraints"] = []
+        for cl in data_str.keys():
+            for constraint in data_str[cl]:
+                temp_dict = {}
+                temp_dict["template"] = constraint['constraint type']
+                temp_dict['parameters'] = []
+                temp_dict['parameters'].append([constraint['first parameter'].lstrip()])
+                if constraint['second parameter']!='':
+                    temp_dict['parameters'].append([constraint['second parameter'].lstrip()])
+                temp_dict['desirability'] = constraint[f'delta_segment_{i}']
+                temp_dict['support'] = 0.0
+                temp_dict['confidence'] = 0.0
+                dict_out["constraints"].append(temp_dict)
+
+        with open(constraints_json_path+f"all_{i}.json", 'w') as fp:
+            json.dump(dict_out, fp,indent=4)
+            fp.close()
+
 
 def generate_features(w,kpi,n_bin):
     case_table = pd.read_csv("output_files/out.csv").sort_values(by=[kpi])
@@ -52,6 +74,7 @@ def generate_features(w,kpi,n_bin):
     ordered_case_ids = ordered_case_ids.to_list()
     bin_size = round(len(case_table) / n_bin)
     event_table = pd.read_csv("output_files/out_event.csv")
+    redis_client.set('tasks', json.dumps(list(set(event_table['activity_name']))))
     event_table['case:concept:name'] = event_table['case_id'].astype(str)
     event_table['concept:name'] = event_table['activity_name'].astype(str)
     event_table['time:timestamp'] = pd.to_datetime(event_table['timestamp'],format='mixed')
@@ -535,6 +558,7 @@ def constraints_export(clusters_with_declare_names, peaks, w,clusters_dict):
     with open(file_path+"data1.json", 'w') as file:
         json.dump(data_str_keys, file, indent=4)
 
+    export_constraints_all_cluster(data_str_keys,file_path,len(peaks)+1)
     for cl in clusters_with_declare_names.keys():
         export_constraints_per_cluster(clusters_with_declare_names[cl], file_path + f'constraints_{cl}.json')
         # prune_constraints_minerful(file_path + f'constraints_{cl}.json', file_path + f'constraints_{cl}_pruned.csv')

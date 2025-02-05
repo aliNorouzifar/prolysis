@@ -1,15 +1,17 @@
 import json
 import prolysis.rules_handling.declare_processing as declare_processing
+from prolysis.util import redis_connection
 
 
 def rules_from_json(file_path):
     with open(file_path, 'r') as file:
         declare_file = json.load(file)
     return declare_file['constraints'],set(declare_file['tasks'])
-def preprocess(rules):
+
+def preprocess(rules, dim, abs_thr):
     rules_processes = []
     co_exist_list = []
-    absence_list = set([r['parameters'][0][0] for r in rules if r['template'] == "Absence"])
+    absence_list = set([r['parameters'][0][0] for r in rules if r['template'] == "Absence" and r[dim] >= abs_thr])
     for r in rules:
         if r['template'] == 'AtLeast2' or r['template'] == 'AtLeast3':
             r_new = r.copy()

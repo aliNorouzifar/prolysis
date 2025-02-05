@@ -5,6 +5,7 @@ import numpy as np
 
 def find_possible_partitions(rules, st_net, en_net,fp, adj_matrix,nodes_order,mapping,adj_dict):
     # activity_list = set(net.nodes) - {'start', 'end'}
+    
     activity_list = set(mapping.keys()) - {'start', 'end'}
     queue = [(set(), {'start'})]
     visited = set()

@@ -2,7 +2,8 @@ import prolysis.rules_handling.declare_processing as declare_processing
 
 
 def is_allowed(SS1,SS2,rules_lookup,to_be_checked, lowest_cost):
-    dim = 'support'
+    # dim = 'support'
+    dim = rules_lookup[2]
     rules =  rules_lookup[0]
     lookup_table = rules_lookup[1]
     SS = SS1.union(SS2)
@@ -47,7 +48,8 @@ def is_allowed(SS1,SS2,rules_lookup,to_be_checked, lowest_cost):
 def is_allowed_single(activity,rules_lookup):
     rules =  rules_lookup[0]
     lookup_table = rules_lookup[1]
-    dim = 'support'
+    # dim = 'support'
+    dim = rules_lookup[2]
     exclude = set()
     penalty = {'single_single': 0, 'xor_single': 0, 'loop_single': 0}
     for r in rules:
