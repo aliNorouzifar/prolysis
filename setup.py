@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="prolysis",
     license="CC BY-NC 4.0",
-    version="0.2.0",
+    version="0.2.1",
     packages=find_packages(),
     install_requires=[
     "automata-lib ==8.4.0",
