@@ -66,8 +66,9 @@ def apply_bi(Lp=pd.DataFrame(), Lm=pd.DataFrame(), parameters: Optional[Dict[Any
         size_par: Size normalisation factor, typically ``len(Lp) / len(Lm)`` for
             IMbi (or ``1`` when there is no ``Lm``).
         rules: Optional Declare rule set to guide discovery (IMr).
-        surv_rate: Optional survival-rate parameter for desirability-aware
-            discovery; threaded through to the candidate search.
+        surv_rate: Survival rate for desirability-aware discovery. ``None``
+            (default) disables desirability weighting and reproduces the base
+            IMr/IMbi behaviour; pass a numeric rate to enable it.
 
     Returns:
         Tuple ``(net, initial_marking, final_marking)`` - the discovered Petri net
@@ -290,7 +291,7 @@ def run_IMr(LPlus_LogFile,support,rules, activities,dim,abs_thr):
         print('process discovery started')
         start = time.time()
         net, initial_marking, final_marking = apply_bi(Lp=event_log_xes, sup=support, ratio=0, size_par=1,
-                                                                 rules=(rules_proccessed, lookup_table, dim, abs_thr))
+                                                                 rules=((rules_proccessed, []), lookup_table, (dim, dim), abs_thr))
         end = time.time()
         print(end - start)
         print('process discovery ended')
@@ -331,7 +332,7 @@ def run_IMr(LPlus_LogFile,support,rules, activities,dim,abs_thr):
         print('The report is generated')
     else:
         net, initial_marking, final_marking = apply_bi(Lp=event_log_xes, sup=support, ratio=0, size_par=1,
-                                                       rules=([], [], ""))
+                                                       rules=(([], []), {}, (dim, dim), "skip"))
 
     pm4py.write_pnml(net, initial_marking, final_marking, os.path.join(r"output_files", "model.pnml"))
     parameters = {pn_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT: "png"}
@@ -446,7 +447,7 @@ def run_IMr_norule(LPlus_LogFile,support):
     print('process discovery started')
     start = time.time()
     net, initial_marking, final_marking = apply_bi(Lp=event_log_xes, sup=support, ratio=0, size_par=1,
-                                                             rules=({}, {}))
+                                                             rules=(([], []), {}, ("support", "support"), "skip"))
     end = time.time()
     print(end - start)
     print('process discovery ended')

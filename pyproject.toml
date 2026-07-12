@@ -26,6 +26,7 @@ dependencies = [
     "frozendict==2.4.4",
     "networkx==2.8.8",
     "matplotlib==3.10.0",
+    "plotly==6.0.0",
     "pm4py==2.7.13.1",
     "numpy==1.26.4",
     "pandas==2.2.3",

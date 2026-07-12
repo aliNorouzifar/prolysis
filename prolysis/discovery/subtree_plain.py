@@ -83,6 +83,11 @@ class SubtreePlain(object):
                 fM = generate_nx_indirect_graph_from_log(self.logM,self.activitiesP)
                 fm_adj = nx.to_numpy_array(fM, nodelist=self.nodes_order[:-2])
 
+            # When no survival rate is supplied (e.g. plain IMr/IMbi via run_IMr, or
+            # apply_bi without surv_rate), skip the desirability weighting so discovery
+            # reproduces the base behaviour instead of feeding None into cut_thr().
+            if surv_rate is None:
+                surv_rate = "skip"
             possible_partitions, reserve2 = find_possible_partitions(rules, self.start_activities,
                                                                     self.end_activities, fP, self.adj_matrixP, self.nodes_order,self.mapping_rev,self.adj_dict,surv_rate, self.activitiesP)
 
