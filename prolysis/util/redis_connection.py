@@ -11,8 +11,9 @@ process-local :class:`InMemoryStore` implementing the same ``get``/``set``/``pin
 surface. This keeps the package importable and usable for single-process runs, tests,
 and demos without requiring a running Redis server.
 
-Only ``get``, ``set``, and ``ping`` are used by prolysis; the fallback implements
-exactly that subset. Import ``redis_client`` from this module — it is either a live
+``get``, ``set`` and ``ping`` are used by prolysis; the web tools additionally call
+``flushall`` on the shared ``redis_client``. The fallback implements exactly that
+surface. Import ``redis_client`` from this module — it is either a live
 ``redis.StrictRedis`` client or an :class:`InMemoryStore`, and both expose the same API.
 """
 from __future__ import annotations
@@ -22,7 +23,7 @@ from typing import Any, Optional
 
 
 class InMemoryStore:
-    """Process-local stand-in for a Redis client (``get``/``set``/``ping`` only).
+    """Process-local stand-in for a Redis client (``get``/``set``/``ping``/``flushall``).
 
     Mimics ``redis.StrictRedis(decode_responses=True)`` closely enough for prolysis:
     values are coerced to ``str`` on write and missing keys return ``None`` on read.
@@ -44,6 +45,10 @@ class InMemoryStore:
         return self._store.get(str(key))
 
     def ping(self) -> bool:
+        return True
+
+    def flushall(self, *args: Any, **kwargs: Any) -> bool:
+        self._store.clear()
         return True
 
 

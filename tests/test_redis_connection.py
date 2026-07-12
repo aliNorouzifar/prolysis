@@ -24,7 +24,16 @@ def test_inmemory_coerces_values_to_str_like_redis():
     assert store.get("d") == "{'a': 1}"
 
 
+def test_inmemory_flushall_clears_state():
+    store = InMemoryStore()
+    store.set("a", "1")
+    store.set("b", "2")
+    assert store.flushall() is True
+    assert store.get("a") is None and store.get("b") is None
+
+
 def test_module_client_exposes_the_common_surface():
-    # redis_client is a live client or an InMemoryStore; both expose get/set/ping.
-    for name in ("get", "set", "ping"):
+    # redis_client is a live client or an InMemoryStore; both expose the surface
+    # prolysis and the web tools use (the apps additionally call flushall).
+    for name in ("get", "set", "ping", "flushall"):
         assert callable(getattr(redis_client, name))
