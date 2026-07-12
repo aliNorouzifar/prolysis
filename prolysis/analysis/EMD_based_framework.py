@@ -40,8 +40,10 @@ def bins_generation(kpi, n_bin):
     """Generate bins and map ranges for a given KPI."""
     case_table = pd.read_csv("output_files/out.csv").sort_values(by=[kpi])
 
-    map_range = {i: float(case_table[kpi].iloc[round((i / n_bin) * len(case_table[kpi]))]) for i in range(n_bin)}
-    map_range[n_bin] = float(case_table[kpi].iloc[-1])
+    # map_range = {i: float(case_table[kpi].iloc[round((i / n_bin) * len(case_table[kpi]))]) for i in range(n_bin)}
+    map_range = {i: (case_table[kpi].iloc[round((i / n_bin) * len(case_table[kpi]))]) for i in range(n_bin)}
+    # map_range[n_bin] = float(case_table[kpi].iloc[-1])
+    map_range[n_bin] = (case_table[kpi].iloc[-1])
 
     bin_size = round(len(case_table) / n_bin)
     bins = [
@@ -148,9 +150,14 @@ def plot_figures_EMD(df, masks, n_bin, map_range,WINDOWS):
     # Replace masked values with NaN for transparency
     heatmap_data = np.ma.array(df, mask=masks).filled(np.nan)
 
+
     # Generate x-tick labels
+    #     x_labels = [
+    #         f"{round(x * (100 / n_bin))}% ({round(map_range[x], 1)})"
+    #         for x in range(1, n_bin, every)
+    #     ]
     x_labels = [
-        f"{round(x * (100 / n_bin))}% ({round(map_range[x], 1)})"
+        f"{round(x * (100 / n_bin))}% ({map_range[x]})"
         for x in range(1, n_bin, every)
     ]
 
@@ -360,11 +367,16 @@ def apply_segmentation(n_bin, w, signal_threshold):
     if peaks:
         for i, p in enumerate(peaks):
             if i == 0:
-                peak_explanations.append(f"Segment {i + 1}: From the beginning to {round(map_range[str(peaks[0]+1)],2)}")
+                # peak_explanations.append(f"Segment {i + 1}: From the beginning to {round(map_range[str(peaks[0]+1)],2)}")
+                peak_explanations.append(
+                    f"Segment {i + 1}: From the beginning to {(map_range[str(peaks[0] + 1)])}")
             else:
-                peak_explanations.append(f"Segment {i + 1}: From {round(map_range[str(peaks[i - 1]+1)],2)} to {round(map_range[str(peaks[i]+1)],2)}")
+                # peak_explanations.append(f"Segment {i + 1}: From {round(map_range[str(peaks[i - 1]+1)],2)} to {round(map_range[str(peaks[i]+1)],2)}")
+                peak_explanations.append(
+                    f"Segment {i + 1}: From {(map_range[str(peaks[i - 1] + 1)])} to {map_range[str(peaks[i] + 1)]}")
 
-        peak_explanations.append(f"Segment {len(peaks)+1}: From {round(map_range[str(peaks[-1]+1)],2)} to the end")
+        # peak_explanations.append(f"Segment {len(peaks)+1}: From {round(map_range[str(peaks[-1]+1)],2)} to the end")
+        peak_explanations.append(f"Segment {len(peaks) + 1}: From {(map_range[str(peaks[-1] + 1)])} to the end")
     else:
         peak_explanations.append("We have only one Segment!")
 
