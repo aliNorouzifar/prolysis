@@ -544,8 +544,10 @@ def constraints_export(clusters_with_declare_names, peaks, w,clusters_dict):
                     stat_dic[f'~segment_{seg_num}'] = round(
                         statistics.mean(c[0:(peaks[p - 1] - (w - 1) + 1)] + c[(peaks[p] - (w - 1)):]), 2)
                 else:
-                    stat_dic[f'segment_{seg_num}'] = round(statistics.mean(c[(peaks[p - 1] - (w - 1)):]), 2)
-                    stat_dic[f'~segment_{seg_num}'] = round(statistics.mean(c[0:(peaks[p - 1] - (w - 1) + 1)]), 2)
+                    # stat_dic[f'segment_{seg_num}'] = round(statistics.mean(c[(peaks[p - 1] - (w - 1)):]), 2)
+                    stat_dic[f'segment_{seg_num}'] = round(statistics.mean(c[(peaks[p - 1] - (w - 1))-1:]), 2)
+                    # stat_dic[f'~segment_{seg_num}'] = round(statistics.mean(c[0:(peaks[p - 1] - (w - 1) + 1)]), 2)
+                    stat_dic[f'~segment_{seg_num}'] = round(statistics.mean(c[0:(peaks[p - 1] - (w - 1) + 1)-1]), 2)
                 stat_dic[f'delta_segment_{seg_num}'] = round(
                     stat_dic[f'segment_{seg_num}'] - stat_dic[f'~segment_{seg_num}'], 2)
                 seg_num += 1
