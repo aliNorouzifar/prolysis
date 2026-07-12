@@ -11,7 +11,11 @@ def rules_from_json(file_path):
 def preprocess(rules, dim, abs_thr):
     rules_processes = []
     co_exist_list = []
-    absence_list = set([r['parameters'][0][0] for r in rules if r['template'] == "Absence" and r[dim] >= abs_thr])
+    not_co_exist_list = []
+    if abs_thr=="skip":
+        absence_list = []
+    else:
+        absence_list = set([r['parameters'][0][0] for r in rules if r['template'] == "Absence" and r[dim] > abs_thr])
     for r in rules:
         if r['template'] == 'AtLeast2' or r['template'] == 'AtLeast3':
             r_new = r.copy()
@@ -24,6 +28,10 @@ def preprocess(rules, dim, abs_thr):
         elif r['template'] == 'CoExistence':
             co_exist_list.append((r['parameters'][0][0],r['parameters'][1][0]))
             if (r['parameters'][1][0],r['parameters'][0][0]) not in co_exist_list:
+                rules_processes.append(r)
+        elif r['template'] == 'NotCoExistence':
+            not_co_exist_list.append((r['parameters'][0][0], r['parameters'][1][0]))
+            if (r['parameters'][1][0], r['parameters'][0][0]) not in not_co_exist_list:
                 rules_processes.append(r)
         else:
             rules_processes.append(r)
@@ -48,3 +56,23 @@ def dfa_list_generator(rules,S_mapped):
     total_conf = sum([el[3] for el in dfa_list])
     return dfa_list, total_sup, total_conf
 
+
+def dfa_list_generator_des(rules,S_mapped):
+    dfa_list = []
+    for c in rules:
+        if "Absence" in c['template'] or "Init" in c['template'] or "End" in c['template'] or "AtMost" in c[
+            'template'] or "AtLeast" in c['template']:
+            dfa_to_add = declare_processing.gen_reg_dfa(c['template'], [c['parameters'][0][0]], S_mapped)
+            dfa_list.append(((c['template'], (c['parameters'][0][0])), dfa_to_add, c['support'],c['confidence'],c['desirability']))
+        else:
+            dfa_to_add = declare_processing.gen_reg_dfa(c['template'],
+                                                        [c['parameters'][0][0], c['parameters'][1][0]],
+                                                        S_mapped)
+            dfa_list.append((
+                            (c['template'], (c['parameters'][0][0], c['parameters'][1][0])),
+                            dfa_to_add, c['support'],c['confidence'],c['desirability']))
+
+    total_sup = sum([el[2] for el in dfa_list])
+    total_conf = sum([el[3] for el in dfa_list])
+    total_des = sum([el[4] for el in dfa_list])
+    return dfa_list, total_sup, total_conf, total_des

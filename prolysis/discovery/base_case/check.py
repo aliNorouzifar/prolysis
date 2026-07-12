@@ -2,7 +2,8 @@ from prolysis.util.functions import n_edges
 from prolysis.discovery.candidate_search.is_allowed_2 import is_allowed_single
 def check_base_case(rules ,sup_thr, ratio,self):
     netP = self.netP
-    activitiesP = set(netP.nodes) - {'start', 'end'}
+    # activitiesP = set(netP.nodes) - {'start', 'end'}
+    activitiesP = self.activitiesP - {'start', 'end'}
 
     if not self.ignore_M:
         netM = self.netM

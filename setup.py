@@ -21,7 +21,9 @@ setup(
     "redis==5.2.1",
     "numba==0.61.0",
     "pot==0.9.5",
-    "rustxes==0.2.6"
+    "rustxes==0.2.6",
+    "shap==0.46.0",
+    "ipython==8.32.0"
     ],
     author="Ali Norouzifar",
     author_email="ali.norouzifar@pads.rwth-aachen.de",
