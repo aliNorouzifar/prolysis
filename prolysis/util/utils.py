@@ -24,9 +24,10 @@ def log_to_tables(df, parameters):
     timestamp_name = parameters['timestamp']
     activity_name = parameters['activity_name']
 
-    # Constants
-    # time_unit = 24 * 3600  # Time unit in seconds (1 day)
-    time_unit = 3600  # Time unit in seconds (1 hour)
+    # Case-duration unit in seconds. Project-configurable via `parameters`:
+    # defaults to one day (24*3600, the original behaviour); pass
+    # `parameters['time_unit'] = 3600` for hours, 60 for minutes, etc.
+    time_unit = parameters.get('time_unit', 24 * 3600)
 
     # Output column names
     output_case_id_name = 'case_id'
