@@ -1,6 +1,5 @@
 import json
 import prolysis.rules_handling.declare_processing as declare_processing
-from prolysis.util import redis_connection
 
 
 def rules_from_json(file_path):

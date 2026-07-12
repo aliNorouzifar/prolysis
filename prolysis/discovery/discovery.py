@@ -1,3 +1,16 @@
+"""Inductive process discovery from desirable/undesirable logs and rules.
+
+This module implements the unified inductive miner behind two techniques of the
+thesis:
+
+* **IMbi** (Ch. 6.1) - discovery from a desirable log ``Lp`` (L+) and an
+  undesirable log ``Lm`` (L-), balanced by the ``sup`` and ``ratio`` parameters.
+* **IMr** (Ch. 6.2) - rule-guided discovery from an event log plus a set of
+  declarative ``rules`` (Declare), controlled by ``sup``.
+
+Both are reached through :func:`apply_bi` / :func:`apply_tree`; the combination of
+arguments selects the behaviour (see :func:`apply_bi`).
+"""
 from typing import Optional, Dict, Any, Tuple
 from pm4py.objects.petri_net.obj import PetriNet, Marking
 from pm4py.objects.conversion.process_tree import converter as tree_to_petri
@@ -33,6 +46,37 @@ class Parameters(Enum):
 
 
 def apply_bi(Lp=pd.DataFrame(), Lm=pd.DataFrame(), parameters: Optional[Dict[Any, Any]] = None, sup= None, ratio = None, noise_thr =None, size_par = None, rules =None, surv_rate=None) -> Tuple[PetriNet, Marking, Marking]:
+    """Discover a Petri net from event logs and/or declarative rules.
+
+    Unified entry point for IMbi and IMr (see the module docstring):
+
+    * **IMbi** - pass a desirable log ``Lp`` and an undesirable log ``Lm`` together
+      with ``sup`` and ``ratio``. The miner recursively selects process structures
+      that separate desirable from undesirable behaviour.
+    * **IMr** - pass an event log as ``Lp`` (leave ``Lm`` empty), a set of Declare
+      ``rules``, and ``sup``. Discovery prefers structures compliant with the rules.
+
+    Args:
+        Lp: Desirable / main event log (pm4py DataFrame). Defaults to empty.
+        Lm: Undesirable event log (pm4py DataFrame). Empty for IMr.
+        parameters: Optional pm4py parameter dict (activity/timestamp/case keys).
+        sup: Support threshold (typically 0.2-0.4). Required.
+        ratio: Cost ratio balancing L+ vs L- (IMbi). Use ``0`` when no ``Lm``.
+        noise_thr: Optional noise-filtering threshold.
+        size_par: Size normalisation factor, typically ``len(Lp) / len(Lm)`` for
+            IMbi (or ``1`` when there is no ``Lm``).
+        rules: Optional Declare rule set to guide discovery (IMr).
+        surv_rate: Optional survival-rate parameter for desirability-aware
+            discovery; threaded through to the candidate search.
+
+    Returns:
+        Tuple ``(net, initial_marking, final_marking)`` - the discovered Petri net
+        and its markings.
+
+    Note:
+        Writes an intermediate ``output_files/discovery_log.json``; the working
+        directory must contain (or allow creation of) an ``output_files`` folder.
+    """
     file_path = r'output_files\discovery_log.json'
     with open(file_path, 'w') as file:
         json.dump([], file, indent=4)

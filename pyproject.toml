@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prolysis"
+version = "0.3.0"
+description = "A Python package for process mining and analysis"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "CC-BY-NC-4.0" }
+authors = [
+    { name = "Ali Norouzifar", email = "ali.norouzifar@pads.rwth-aachen.de" },
+]
+keywords = ["process mining", "process discovery", "declarative constraints", "conformance checking"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
+dependencies = [
+    "automata-lib==8.4.0",
+    "frozendict==2.4.4",
+    "networkx==2.8.8",
+    "matplotlib==3.10.0",
+    "pm4py==2.7.13.1",
+    "numpy==1.26.4",
+    "pandas==2.2.3",
+    "ruptures==1.1.9",
+    "scikit-learn==1.6.0",
+    "scipy==1.14.1",
+    "seaborn==0.13.2",
+    "pyemd==1.0.0",
+    "numba==0.61.0",
+    "pot==0.9.5",
+    "rustxes==0.2.6",
+    "shap==0.46.0",
+    "ipython==8.32.0",
+]
+
+[project.optional-dependencies]
+# Redis enables cross-process shared state; prolysis falls back to an in-memory
+# store when it is absent, so it is optional. Install with: pip install prolysis[redis]
+redis = ["redis==5.2.1"]
+# Development / test tooling.
+dev = ["pytest>=7"]
+
+[project.urls]
+Homepage = "https://github.com/aliNorouzifar/prolysis"
+Repository = "https://github.com/aliNorouzifar/prolysis"
+Issues = "https://github.com/aliNorouzifar/prolysis/issues"
+
+[tool.setuptools.packages.find]
+include = ["prolysis*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
