@@ -14,6 +14,9 @@ from prolysis.declare.evaluation import (
     evaluate_trace,
     evaluate_log,
 )
+from prolysis.declare.measures import measure, ALL_TEMPLATES
+from prolysis.declare.discovery import discover, discover_from_log, variants_from_log
+from prolysis.declare.signals import sliding_window_signals, write_slider_csv
 
 __all__ = [
     "SATISFIED",
@@ -22,4 +25,11 @@ __all__ = [
     "constraint_key",
     "evaluate_trace",
     "evaluate_log",
+    "measure",
+    "ALL_TEMPLATES",
+    "discover",
+    "discover_from_log",
+    "variants_from_log",
+    "sliding_window_signals",
+    "write_slider_csv",
 ]
