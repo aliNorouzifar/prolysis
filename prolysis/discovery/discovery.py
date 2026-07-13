@@ -91,6 +91,12 @@ def apply_bi(Lp=pd.DataFrame(), Lm=pd.DataFrame(), parameters: Optional[Dict[Any
 def apply_tree(logp,logm, parameters=None, sup= None, ratio = None, noise_thr =None, size_par = None, rules= None,surv_rate = None):
     if parameters is None:
         parameters = {}
+    if rules is None:
+        # No rules (e.g. plain IMbi via apply_bi): supply the empty structure that
+        # search_desirability expects — rules[0] = (cont, des), a lookup table, a
+        # (dim_cont, dim_des) pair, and the abs-threshold slot — so no constraints
+        # are applied without feeding None into the candidate search.
+        rules = (([], []), {}, ("", ""), "skip")
     contains_empty_traces = False
     traces_length = [len(trace) for trace in logp]
     if traces_length:
