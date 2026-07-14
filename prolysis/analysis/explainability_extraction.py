@@ -15,6 +15,9 @@ from scipy.spatial import KDTree
 import json
 from prolysis.util.redis_connection import redis_client
 from prolysis.util.logging import log_command
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib.colors import ListedColormap
 
 linkage_method = 'ward'
 linkage_metric = 'euclidean'
@@ -58,7 +61,7 @@ def export_constraints_all_cluster(data_str,constraints_json_path,N_segment):
                 temp_dict['parameters'].append([constraint['first parameter'].lstrip()])
                 if constraint['second parameter']!='':
                     temp_dict['parameters'].append([constraint['second parameter'].lstrip()])
-                temp_dict['desirability'] = constraint[f'delta_segment_{i}']
+                temp_dict['desirability'] = constraint[f'delta_segment_{i}']/100
                 temp_dict['support'] = 0.0
                 temp_dict['confidence'] = 0.0
                 dict_out["constraints"].append(temp_dict)
@@ -544,8 +547,10 @@ def constraints_export(clusters_with_declare_names, peaks, w,clusters_dict):
                     stat_dic[f'~segment_{seg_num}'] = round(
                         statistics.mean(c[0:(peaks[p - 1] - (w - 1) + 1)] + c[(peaks[p] - (w - 1)):]), 2)
                 else:
-                    stat_dic[f'segment_{seg_num}'] = round(statistics.mean(c[(peaks[p - 1] - (w - 1)):]), 2)
-                    stat_dic[f'~segment_{seg_num}'] = round(statistics.mean(c[0:(peaks[p - 1] - (w - 1) + 1)]), 2)
+                    # stat_dic[f'segment_{seg_num}'] = round(statistics.mean(c[(peaks[p - 1] - (w - 1)):]), 2)
+                    stat_dic[f'segment_{seg_num}'] = round(statistics.mean(c[(peaks[p - 1] - (w - 1))-1:]), 2)
+                    # stat_dic[f'~segment_{seg_num}'] = round(statistics.mean(c[0:(peaks[p - 1] - (w - 1) + 1)]), 2)
+                    stat_dic[f'~segment_{seg_num}'] = round(statistics.mean(c[0:(peaks[p - 1] - (w - 1) + 1)-1]), 2)
                 stat_dic[f'delta_segment_{seg_num}'] = round(
                     stat_dic[f'segment_{seg_num}'] - stat_dic[f'~segment_{seg_num}'], 2)
                 seg_num += 1
@@ -746,203 +751,195 @@ def plot_figures(df, masks, n_bin, map_range, peaks, constraints, w, cluster_bou
 
 
 # We made the visualization in Plotly later, to allow for intractive visualization
-# def plot_figures(df, masks, n_bin, map_range, peaks, constraints, w, cluster_bounds,clusters_with_declare_names, data_color, corr_mat,WINDOWS):
-#     every = 2
-#     color_theme_drift_map = 'Blues'
-#
-#     def insert_and_clean_np(array, new_number):
-#         """
-#         Insert a new number into a sorted NumPy array, maintain the order,
-#         and remove any numbers within a distance of 1 from the new number.
-#
-#         Parameters:
-#         - array (np.ndarray): A sorted NumPy array of numbers.
-#         - new_number (int or float): The number to insert.
-#
-#         Returns:
-#         - np.ndarray: The updated NumPy array.
-#         """
-#         if new_number not in array:
-#             # Find the correct insertion point
-#             insertion_index = np.searchsorted(array, new_number)
-#
-#             # Insert the new number into the array
-#             array = np.insert(array, insertion_index, new_number)
-#
-#             # Identify elements to keep (distance > 1 from the new number)
-#             mask = np.abs(array - new_number) != 1
-#
-#             # Return the updated array
-#             return array[mask]
-#             # return mask
-#         else:
-#             return array
-#
-#     ################## Figure 3############################################
-#     L1 = []
-#     for k in clusters_with_declare_names.keys():
-#         for s in clusters_with_declare_names[k]:
-#             L1.append(s)
-#     L1_index = {tuple(sublist[0:3]): idx for idx, sublist in enumerate(L1)}
-#
-#     # Sort and filter L2 based on L1
-#     L2_ordered = sorted([sublist for sublist in data_color if tuple(sublist[0:3]) in L1_index],
-#                         key=lambda x: L1_index[tuple(x[0:3])])
-#     L2_ordered = [x[3:] for x in L2_ordered]
-#     data_c = []
-#     data_c_color_1 = []
-#     data_c_color_2 = []
-#     for i in range(len(constraints)):
-#         new_list = [0] * (w - 1) + constraints[i] + [0] * (w - 1)
-#         new_list_color_1 = [True] * (w - 1) + L2_ordered[i] + [True] * (w - 1)
-#         new_list_color_2 = [True] * (w - 1) + [False] * len(L2_ordered[i]) + [True] * (w - 1)
-#         data_c.append(new_list)
-#         data_c_color_1.append(new_list_color_1)
-#         data_c_color_2.append(new_list_color_2)
-#
-#     # Create a new figure with two subplots with different heights
-#     fig3, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 9),
-#                                    gridspec_kw={'height_ratios': [10, 1]})  # First plot 3 times bigger
-#
-#     fig3.suptitle('Control Flow Features and Change Points Overview', fontsize=20)
-#
-#     # sns.heatmap(data_c, mask=list(mask_ax1[windows.index(w)]), linewidth=0, cmap=color_theme_drift_map,  vmin=0, vmax=100, ax=ax1)
-#     light_gray_cmap = ListedColormap(['#d3d3d3'])
-#     sns.heatmap(data_c_color_1, mask=np.array(data_c_color_2), cmap=light_gray_cmap, cbar=False, ax=ax1)
-#     ax1.set_facecolor("gray")
-#     sns.heatmap(np.array(data_c), mask=np.array(data_c_color_1), linewidth=0, cmap=color_theme_drift_map, cbar=True,
-#                 vmin=0, vmax=100, ax=ax1)
-#
-#     cbar1 = ax1.collections[1].colorbar
-#     cbar1.ax.tick_params(labelsize=16)
-#     cbar1.set_label('Confidence', fontsize=18)
-#
-#     original_ticks = cbar1.get_ticks()  # Get the current ticks (e.g., [0, 20, 40, ..., 100])
-#     normalized_ticks = np.linspace(0, 1, len(original_ticks))  # Map the ticks to 0–1
-#
-#     # Update the color bar with normalized ticks
-#     cbar1.set_ticks(original_ticks)  # Retain original tick positions
-#     cbar1.set_ticklabels([f"{tick:.1f}" for tick in normalized_ticks])  # Set new labels (0–1)
-#
-#     for bound in cluster_bounds:
-#         ax1.axhline(y=bound, color='black', linestyle='--', linewidth=2)
-#
-#     for pp in peaks:
-#         ax1.axvline(x=0.5 + pp - 0.05, color='red', linestyle='--', linewidth=4)
-#
-#
-#     ax1.set_xticks([])
-#     y_tick = []
-#     y_labels = []
-#     for i, cb in enumerate(cluster_bounds):
-#         if i == 0:
-#             y_tick.append(round(cb / 2, 0))
-#         else:
-#             y_tick.append(round((cluster_bounds[i] + cluster_bounds[i - 1]) / 2, 0))
-#         y_labels.append(f'cluster {len(cluster_bounds) - i}')
-#     ax1.set_yticks(y_tick)
-#     ax1.set_yticklabels(y_labels)
-#
-#     x_tick = []
-#     x_labels = []
-#     for i in range(len(peaks) + 1):
-#         if i == 0:
-#             x_tick.append(round(peaks[i] / 2, 0))
-#         elif i == len(peaks):
-#             x_tick.append(round((n_bin + peaks[i - 1]) / 2, 0))
-#         else:
-#             x_tick.append(round((peaks[i] + peaks[i - 1]) / 2, 0))
-#         x_labels.append(f'segment {i + 1}')
-#     ax1.set_xticks(x_tick)
-#     ax1.set_xticklabels(x_labels)
-#     ax1.tick_params(axis='x', labelsize=16, rotation=0)
-#     ax1.tick_params(axis='y', labelsize=16, rotation=0)
-#     ax1.grid(False)
-#
-#
-#     sns.heatmap(df.loc[w].to_frame().T, mask=masks[WINDOWS.index(w)], cmap="Reds", linewidth=0,
-#                 ax=ax2)
-#
-#     ticks = np.arange(0, n_bin - 1, 2)
-#     pk_id = []
-#     for new_number in peaks:
-#         ticks = insert_and_clean_np(ticks, new_number)
-#         pk_id.append(np.where(ticks == new_number)[0][0])
-#     ticks_labels = [str(round(x * (100 / n_bin))) + "% (" + str(round(map_range[str(x)], 1)) + ")" for x in (ticks + 1)]
-#
-#     print(pk_id)
-#     ax2.set_xticks(0.5 + ticks)
-#     ax2.set_xticklabels(ticks_labels)
-#
-#     tick_labels = ax2.get_xticklabels()  # Get all x-axis tick labels
-#     print(tick_labels)
-#     for pk in pk_id:
-#         # Change the color of specific ticks
-#         tick_labels[pk].set_color('red')  # Change tick at position 2 to red
-#
-#     ax2.set_facecolor("gray")
-#     ax2.grid(False)
-#     # ax2.set_title('sliding window analysis', fontsize=20)
-#     ax2.set_xlabel('traces', fontsize=18)
-#     ax2.set_ylabel('window size', fontsize=18)
-#     ax2.tick_params(axis='x', labelsize=16, rotation=90)
-#     ax2.tick_params(axis='y', labelsize=16)
-#
-#     # Adjust colorbar font size
-#     cbar2 = ax2.collections[0].colorbar
-#     cbar2.ax.tick_params(labelsize=16)
-#     cbar2.set_label('ldist', fontsize=18)
-#
-#     ##################### Figure 4####################
-#     from matplotlib.colors import LinearSegmentedColormap
-#
-#     corr_mat_transposed = np.array(corr_mat).T  # Transpose the matrix
-#
-#     # Output the list of correlations
-#     fig4 = plt.figure(figsize=(8, 7))
-#     fig4.suptitle('Correlation Between Features and Segments', fontsize=20)
-#
-#     colors = ['#8B0000', 'white', '#00008B']  # Dark blue, white, dark red
-#     # Create a colormap
-#     custom_cmap = LinearSegmentedColormap.from_list("custom_cmp", colors)
-#
-#     # Create a heatmap with black grid lines
-#     ax3 = sns.heatmap(
-#         corr_mat_transposed,
-#         annot=False,
-#         cmap=custom_cmap,
-#         cbar=True,
-#         vmin=-1,
-#         vmax=1,
-#         linewidths=0.5,
-#         linecolor='gray'
-#     )
-#
-#     ax3.set_xticks(0.5 + np.arange(0, len(peaks) + 1))
-#     ax3.set_xticklabels(x_labels)
-#
-#     ax3.set_yticks(0.5 + np.arange(0, len(cluster_bounds)))
-#     ax3.set_yticklabels(y_labels[::-1])
-#
-#     # Rotate the y-axis tick labels instead of x-axis
-#     ax3.tick_params(axis='y', rotation=0, labelsize=16)
-#     ax3.tick_params(axis='x', labelsize=16)
-#
-#     ax3.invert_yaxis()
-#
-#     cbar3 = ax3.collections[0].colorbar
-#     cbar3.ax.tick_params(labelsize=16)
-#     cbar3.set_label('correlation', fontsize=18)
-#
-#     buf = BytesIO()
-#     fig3.savefig(buf, format="png", bbox_inches='tight')
-#     fig_data3 = base64.b64encode(buf.getbuffer()).decode("ascii")
-#
-#     buf = BytesIO()
-#     fig4.savefig(buf, format="png", bbox_inches='tight')
-#     fig_data4 = base64.b64encode(buf.getbuffer()).decode("ascii")
-#
-#     return f'data:image/png;base64,{fig_data3}', f'data:image/png;base64,{fig_data4}'
+def plot_figures_mpl(df, masks, n_bin, map_range, peaks, constraints, w, cluster_bounds,clusters_with_declare_names, data_color, corr_mat,WINDOWS):
+    every = 2
+    color_theme_drift_map = 'Blues'
+
+    def insert_and_clean_np(array, new_number):
+        """
+        Insert a new number into a sorted NumPy array, maintain the order,
+        and remove any numbers within a distance of 1 from the new number.
+
+        Parameters:
+        - array (np.ndarray): A sorted NumPy array of numbers.
+        - new_number (int or float): The number to insert.
+
+        Returns:
+        - np.ndarray: The updated NumPy array.
+        """
+        if new_number not in array:
+            # Find the correct insertion point
+            insertion_index = np.searchsorted(array, new_number)
+
+            # Insert the new number into the array
+            array = np.insert(array, insertion_index, new_number)
+
+            # Identify elements to keep (distance > 1 from the new number)
+            mask = np.abs(array - new_number) != 1
+
+            # Return the updated array
+            return array[mask]
+            # return mask
+        else:
+            return array
+
+    ################## Figure 3############################################
+    L1 = []
+    for k in clusters_with_declare_names.keys():
+        for s in clusters_with_declare_names[k]:
+            L1.append(s)
+    L1_index = {tuple(sublist[0:3]): idx for idx, sublist in enumerate(L1)}
+
+    # Sort and filter L2 based on L1
+    L2_ordered = sorted([sublist for sublist in data_color if tuple(sublist[0:3]) in L1_index],
+                        key=lambda x: L1_index[tuple(x[0:3])])
+    L2_ordered = [x[3:] for x in L2_ordered]
+    data_c = []
+    data_c_color_1 = []
+    data_c_color_2 = []
+    for i in range(len(constraints)):
+        new_list = [0] * (w - 1) + constraints[i] + [0] * (w - 1)
+        new_list_color_1 = [True] * (w - 1) + L2_ordered[i] + [True] * (w - 1)
+        new_list_color_2 = [True] * (w - 1) + [False] * len(L2_ordered[i]) + [True] * (w - 1)
+        data_c.append(new_list)
+        data_c_color_1.append(new_list_color_1)
+        data_c_color_2.append(new_list_color_2)
+
+    # Create a new figure with two subplots with different heights
+    fig3, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 9),
+                                   gridspec_kw={'height_ratios': [10, 1]})
+
+    fig3.suptitle('Control Flow Features and Change Points Overview', fontsize=20)
+
+    # sns.heatmap(data_c, mask=list(mask_ax1[windows.index(w)]), linewidth=0, cmap=color_theme_drift_map,  vmin=0, vmax=100, ax=ax1)
+    light_gray_cmap = ListedColormap(['#d3d3d3'])
+    sns.heatmap(data_c_color_1, mask=np.array(data_c_color_2), cmap=light_gray_cmap, cbar=False, ax=ax1)
+    ax1.set_facecolor("gray")
+    sns.heatmap(np.array(data_c), mask=np.array(data_c_color_1), linewidth=0, cmap=color_theme_drift_map, cbar=True,
+                vmin=0, vmax=100, ax=ax1)
+
+    cbar1 = ax1.collections[1].colorbar
+    cbar1.ax.tick_params(labelsize=16)
+    cbar1.set_label('Confidence', fontsize=18)
+
+    original_ticks = cbar1.get_ticks()  # Get the current ticks (e.g., [0, 20, 40, ..., 100])
+    normalized_ticks = np.linspace(0, 1, len(original_ticks))  # Map the ticks to 0–1
+
+    # Update the color bar with normalized ticks
+    cbar1.set_ticks(original_ticks)  # Retain original tick positions
+    cbar1.set_ticklabels([f"{tick:.1f}" for tick in normalized_ticks])  # Set new labels (0–1)
+
+    for bound in cluster_bounds:
+        ax1.axhline(y=bound, color='black', linestyle='--', linewidth=2)
+
+    for pp in peaks:
+        ax1.axvline(x=0.5 + pp - 0.05, color='red', linestyle='--', linewidth=4)
+
+
+    ax1.set_xticks([])
+    y_tick = []
+    y_labels = []
+    for i, cb in enumerate(cluster_bounds):
+        if i == 0:
+            y_tick.append(round(cb / 2, 0))
+        else:
+            y_tick.append(round((cluster_bounds[i] + cluster_bounds[i - 1]) / 2, 0))
+        y_labels.append(f'cluster {len(cluster_bounds) - i}')
+    ax1.set_yticks(y_tick)
+    ax1.set_yticklabels(y_labels)
+
+    x_tick = []
+    x_labels = []
+    for i in range(len(peaks) + 1):
+        if i == 0:
+            x_tick.append(round(peaks[i] / 2, 0))
+        elif i == len(peaks):
+            x_tick.append(round((n_bin + peaks[i - 1]) / 2, 0))
+        else:
+            x_tick.append(round((peaks[i] + peaks[i - 1]) / 2, 0))
+        x_labels.append(f'segment {i + 1}')
+    ax1.set_xticks(x_tick)
+    ax1.set_xticklabels(x_labels)
+    ax1.tick_params(axis='x', labelsize=16, rotation=0)
+    ax1.tick_params(axis='y', labelsize=16, rotation=0)
+    ax1.grid(False)
+
+
+    sns.heatmap(df.loc[w].to_frame().T, mask=masks[WINDOWS.index(w)], cmap="Reds", linewidth=0,
+                ax=ax2)
+
+    ticks = np.arange(0, n_bin - 1, 2)
+    pk_id = []
+    for new_number in peaks:
+        ticks = insert_and_clean_np(ticks, new_number)
+        pk_id.append(np.where(ticks == new_number)[0][0])
+    ticks_labels = [str(round(x * (100 / n_bin))) + "% (" + str(round(map_range[x], 1)) + ")" for x in (ticks + 1)]
+
+    print(pk_id)
+    ax2.set_xticks(0.5 + ticks)
+    ax2.set_xticklabels(ticks_labels)
+
+    tick_labels = ax2.get_xticklabels()  # Get all x-axis tick labels
+    print(tick_labels)
+    for pk in pk_id:
+        # Change the color of specific ticks
+        tick_labels[pk].set_color('red')  # Change tick at position 2 to red
+
+    ax2.set_facecolor("gray")
+    ax2.grid(False)
+    # ax2.set_title('sliding window analysis', fontsize=20)
+    ax2.set_xlabel('traces', fontsize=18)
+    ax2.set_ylabel('window size', fontsize=18)
+    ax2.tick_params(axis='x', labelsize=16, rotation=90)
+    ax2.tick_params(axis='y', labelsize=16)
+
+    # Adjust colorbar font size
+    cbar2 = ax2.collections[0].colorbar
+    cbar2.ax.tick_params(labelsize=16)
+    cbar2.set_label('ldist', fontsize=18)
+
+    ##################### Figure 4####################
+    from matplotlib.colors import LinearSegmentedColormap
+
+    corr_mat_transposed = np.array(corr_mat).T  # Transpose the matrix
+
+    # Output the list of correlations
+    fig4 = plt.figure(figsize=(8, 7))
+    fig4.suptitle('Correlation Between Features and Segments', fontsize=20)
+
+    colors = ['#8B0000', 'white', '#00008B']  # Dark blue, white, dark red
+    # Create a colormap
+    custom_cmap = LinearSegmentedColormap.from_list("custom_cmp", colors)
+
+    # Create a heatmap with black grid lines
+    ax3 = sns.heatmap(
+        corr_mat_transposed,
+        annot=False,
+        cmap=custom_cmap,
+        cbar=True,
+        vmin=-1,
+        vmax=1,
+        linewidths=0.5,
+        linecolor='gray'
+    )
+
+    ax3.set_xticks(0.5 + np.arange(0, len(peaks) + 1))
+    ax3.set_xticklabels(x_labels)
+
+    ax3.set_yticks(0.5 + np.arange(0, len(cluster_bounds)))
+    ax3.set_yticklabels(y_labels[::-1])
+
+    # Rotate the y-axis tick labels instead of x-axis
+    ax3.tick_params(axis='y', rotation=0, labelsize=16)
+    ax3.tick_params(axis='x', labelsize=16)
+
+    ax3.invert_yaxis()
+
+    cbar3 = ax3.collections[0].colorbar
+    cbar3.ax.tick_params(labelsize=16)
+    cbar3.set_label('correlation', fontsize=18)
+
+    return fig3,fig4
 
 
 

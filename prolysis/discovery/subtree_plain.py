@@ -1,5 +1,6 @@
 import prolysis.discovery.split_functions.split as split
-from prolysis.discovery.candidate_search.search import find_possible_partitions
+# from prolysis.discovery.candidate_search.search import find_possible_partitions
+from prolysis.discovery.candidate_search.search_desirability import find_possible_partitions
 from prolysis.discovery.base_case.check import check_base_case
 from prolysis.discovery.cut_quality.cost_functions import cost_functions
 from prolysis.util.functions import generate_nx_graph_from_log, generate_nx_indirect_graph_from_log, get_input_output_B_indices
@@ -12,7 +13,7 @@ from collections import Counter
 
 class SubtreePlain(object):
     def __init__(self, logp,logm, rec_depth, noise_threshold= None,
-                   parameters=None, sup= None, ratio = None, size_par = None, rules = None):
+                   parameters=None, sup= None, ratio = None, size_par = None, rules = None, surv_rate = None):
 
         nt = 0.000 * sum(logp.values())
         self.rec_depth = rec_depth
@@ -64,10 +65,10 @@ class SubtreePlain(object):
         self.parameters = parameters
         self.detected_cut = None
         self.children = []
-        self.detect_cut(parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, rules = rules)
+        self.detect_cut(parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, rules = rules, surv_rate = surv_rate)
 
 
-    def detect_cut(self, parameters=None, sup= None, ratio = None, size_par = None, rules = None):
+    def detect_cut(self, parameters=None, sup= None, ratio = None, size_par = None, rules = None, surv_rate = None):
 
         if parameters is None:
             parameters = {}
@@ -82,15 +83,20 @@ class SubtreePlain(object):
                 fM = generate_nx_indirect_graph_from_log(self.logM,self.activitiesP)
                 fm_adj = nx.to_numpy_array(fM, nodelist=self.nodes_order[:-2])
 
+            # When no survival rate is supplied (e.g. plain IMr/IMbi via run_IMr, or
+            # apply_bi without surv_rate), skip the desirability weighting so discovery
+            # reproduces the base behaviour instead of feeding None into cut_thr().
+            if surv_rate is None:
+                surv_rate = "skip"
             possible_partitions, reserve2 = find_possible_partitions(rules, self.start_activities,
-                                                                    self.end_activities, fP, self.adj_matrixP, self.nodes_order,self.mapping_rev,self.adj_dict)
+                                                                    self.end_activities, fP, self.adj_matrixP, self.nodes_order,self.mapping_rev,self.adj_dict,surv_rate, self.activitiesP)
 
             # print(len(possible_partitions))
             cut = []
 
             ratio_backup = ratio
 
-            min_cost = 65534
+            min_cost = 100000
             for pp in possible_partitions:
                 A = pp[0] - {'start', 'end'}
                 A_np = np.array([self.mapping_rev[s] for s in A], dtype=np.int16)
@@ -229,7 +235,8 @@ class SubtreePlain(object):
             cut = sorted_cuts[0]
             # print(len(sorted_cuts))
 
-        # print(cut[:-2])
+        print(cut[:-2])
+
 
         map_cut_op = {'par': 'parallel', 'seq': 'sequential', 'exc': 'xor', 'exc_tau':'xor', 'exc2': 'xor',
                       'loop': 'loopCut', 'loop1': 'loopCut', 'loop_tau': 'loopCut'}
@@ -250,7 +257,7 @@ class SubtreePlain(object):
                     SubtreePlain(l[0], l[1],
                                  self.rec_depth + 1,
                                  noise_threshold=self.noise_threshold,
-                                 parameters=parameters, sup=sup, ratio=ratio, size_par=size_par, rules=rules))
+                                 parameters=parameters, sup=sup, ratio=ratio, size_par=size_par, rules=rules, surv_rate=surv_rate))
         elif cut[1]!='single_activity' and cut[1]!='empty_log':
             print('It should not happen, if you see this error there could be a bug in the code!')
 

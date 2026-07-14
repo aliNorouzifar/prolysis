@@ -12,6 +12,10 @@ import plotly.graph_objects as go
 import numpy as np
 from prolysis.util.redis_connection import redis_client
 from prolysis.util.logging import log_command
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+
 
 # # Constants
 OUTPUT_DIR = "output_files"
@@ -36,8 +40,10 @@ def bins_generation(kpi, n_bin):
     """Generate bins and map ranges for a given KPI."""
     case_table = pd.read_csv("output_files/out.csv").sort_values(by=[kpi])
 
-    map_range = {i: float(case_table[kpi].iloc[round((i / n_bin) * len(case_table[kpi]))]) for i in range(n_bin)}
-    map_range[n_bin] = float(case_table[kpi].iloc[-1])
+    # map_range = {i: float(case_table[kpi].iloc[round((i / n_bin) * len(case_table[kpi]))]) for i in range(n_bin)}
+    map_range = {i: (case_table[kpi].iloc[round((i / n_bin) * len(case_table[kpi]))]) for i in range(n_bin)}
+    # map_range[n_bin] = float(case_table[kpi].iloc[-1])
+    map_range[n_bin] = (case_table[kpi].iloc[-1])
 
     bin_size = round(len(case_table) / n_bin)
     bins = [
@@ -144,9 +150,14 @@ def plot_figures_EMD(df, masks, n_bin, map_range,WINDOWS):
     # Replace masked values with NaN for transparency
     heatmap_data = np.ma.array(df, mask=masks).filled(np.nan)
 
+
     # Generate x-tick labels
+    #     x_labels = [
+    #         f"{round(x * (100 / n_bin))}% ({round(map_range[x], 1)})"
+    #         for x in range(1, n_bin, every)
+    #     ]
     x_labels = [
-        f"{round(x * (100 / n_bin))}% ({round(map_range[x], 1)})"
+        f"{round(x * (100 / n_bin))}% ({map_range[x]})"
         for x in range(1, n_bin, every)
     ]
 
@@ -235,51 +246,51 @@ def plot_figures_segments(dist_matrix, peaks):
 
 
 ### previous version of the figures with mathplotlib
-# def plot_figures(df, masks, n_bin, map_range, dist_matrix, peaks, w,WINDOWS):
-#     every = 2
-#     """Generate heatmaps and comparison plots."""
-#     # Sliding Window Heatmap
-#     fig1, ax1 = plt.subplots(figsize=(15, 3))
-#     sns.heatmap(df, cmap="Reds", mask=np.array(masks), ax=ax1)
-#     ax1.set_xticks(0.5 + np.arange(0, n_bin - 1, 3))
-#     ax1.set_xticklabels(
-#         [f"{round(x * (100 / n_bin))}% ({round(map_range[x], 1)})" for x in range(1, n_bin, 3)]
-#     )
-#     ax1.set_facecolor("gray")
-#     ax1.set_title("Sliding Window Analysis")
-#     ax1.set_xlabel("Traces")
-#     ax1.set_ylabel("Window Size")
-#     ax1.set_xticks(0.5 + np.arange(0, n_bin - 1, every))
-#     ax1.set_xticklabels(
-#         [str(round(x * (100 / n_bin))) + "% (" + str(round(map_range[x], 1)) + ")" for x in np.arange(1, n_bin, every)])
-#     ax1.set_yticks([x+0.5 for x in range(0,len(WINDOWS))], labels=WINDOWS)
-#     plt.xticks(rotation=90)
-#     plt.close(fig1)
-#
-#     cmap = plt.cm.Reds
-#     fig2 = plt.figure(figsize=(7, 7))
-#     ax = sns.heatmap(dist_matrix, cmap=cmap, xticklabels=['segment' + str(i) for i in range(1, dist_matrix.shape[0] + 1)],
-#                      yticklabels=['segment' + str(i) for i in range(1, dist_matrix.shape[0] + 1)])
-#
-#     fig2.suptitle('segments comparison', fontsize=20)
-#     plt.xticks(fontsize=18)
-#     plt.yticks(fontsize=18)
-#     cbar = ax.collections[0].colorbar
-#     cbar.ax.tick_params(labelsize=18)
-#     plt.xlabel(' ', fontsize=18)
-#     cbar.set_label('ldist', fontsize=18)
-#     plt.close(fig2)
-#
-#     buf = BytesIO()
-#     fig1.savefig(buf, format="png", bbox_inches = 'tight')
-#     # Embed the result in the html output.
-#     fig_data1 = base64.b64encode(buf.getbuffer()).decode("ascii")
-#
-#     buf = BytesIO()
-#     fig2.savefig(buf, format="png", bbox_inches='tight')
-#     # Embed the result in the html output.
-#     fig_data2 = base64.b64encode(buf.getbuffer()).decode("ascii")
-#     return f'data:image/png;base64,{fig_data1}', f'data:image/png;base64,{fig_data2}'
+def plot_figures_mpl(df, masks, n_bin, map_range, dist_matrix, peaks, w,WINDOWS):
+    every = 2
+    """Generate heatmaps and comparison plots."""
+    # Sliding Window Heatmap
+    fig1, ax1 = plt.subplots(figsize=(15, 3))
+    sns.heatmap(df, cmap="Reds", mask=np.array(masks), ax=ax1)
+    ax1.set_xticks(0.5 + np.arange(0, n_bin - 1, 3))
+    ax1.set_xticklabels(
+        [f"{round(x * (100 / n_bin))}% ({round(map_range[x], 1)})" for x in range(1, n_bin, 3)]
+    )
+    ax1.set_facecolor("gray")
+    ax1.set_title("Sliding Window Analysis")
+    ax1.set_xlabel("Traces")
+    ax1.set_ylabel("Window Size")
+    ax1.set_xticks(0.5 + np.arange(0, n_bin - 1, every))
+    ax1.set_xticklabels(
+        [str(round(x * (100 / n_bin))) + "% (" + str(round(map_range[x], 1)) + ")" for x in np.arange(1, n_bin, every)])
+    ax1.set_yticks([x+0.5 for x in range(0,len(WINDOWS))], labels=WINDOWS)
+    plt.xticks(rotation=90)
+    plt.close(fig1)
+
+    cmap = plt.cm.Reds
+    fig2 = plt.figure(figsize=(7, 7))
+    ax = sns.heatmap(dist_matrix, cmap=cmap, xticklabels=['segment' + str(i) for i in range(1, dist_matrix.shape[0] + 1)],
+                     yticklabels=['segment' + str(i) for i in range(1, dist_matrix.shape[0] + 1)])
+
+    fig2.suptitle('segments comparison', fontsize=20)
+    plt.xticks(fontsize=16,rotation=0)
+    plt.yticks(fontsize=16)
+    cbar = ax.collections[0].colorbar
+    cbar.ax.tick_params(labelsize=18)
+    plt.xlabel(' ', fontsize=18)
+    cbar.set_label('ldist', fontsize=18)
+    plt.close(fig2)
+
+    # buf = BytesIO()
+    # fig1.savefig(buf, format="png", bbox_inches = 'tight')
+    # # Embed the result in the html output.
+    # fig_data1 = base64.b64encode(buf.getbuffer()).decode("ascii")
+    #
+    # buf = BytesIO()
+    # fig2.savefig(buf, format="png", bbox_inches='tight')
+    # # Embed the result in the html output.
+    # fig_data2 = base64.b64encode(buf.getbuffer()).decode("ascii")
+    return fig1, fig2
 #
 #
 def export_logs(segments_ids):
@@ -294,8 +305,10 @@ def export_logs(segments_ids):
         segment_log = event_table[event_table['case_id'].isin(segment_cases)]
         segment_log = pm4py.format_dataframe(segment_log, case_id="case_id", activity_key="activity_name",
                                              timestamp_key="timestamp")
-        event_log = pm4py.convert_to_event_log(segment_log)
-        pm4py.write_xes(event_log, f"output_files/segment_{idx}.xes")
+        # event_log = pm4py.convert_to_event_log(segment_log)
+        # pm4py.write_xes(event_log, f"output_files/segment_{idx}.xes")
+        pm4py.write_xes(
+            segment_log[['case:concept:name', 'concept:name', 'time:timestamp']], f"output_files/segment_{idx}.xes")
 
 
 
@@ -354,11 +367,16 @@ def apply_segmentation(n_bin, w, signal_threshold):
     if peaks:
         for i, p in enumerate(peaks):
             if i == 0:
-                peak_explanations.append(f"Segment {i + 1}: From the beginning to {round(map_range[str(peaks[0]+1)],2)}")
+                # peak_explanations.append(f"Segment {i + 1}: From the beginning to {round(map_range[str(peaks[0]+1)],2)}")
+                peak_explanations.append(
+                    f"Segment {i + 1}: From the beginning to {(map_range[str(peaks[0] + 1)])}")
             else:
-                peak_explanations.append(f"Segment {i + 1}: From {round(map_range[str(peaks[i - 1]+1)],2)} to {round(map_range[str(peaks[i]+1)],2)}")
+                # peak_explanations.append(f"Segment {i + 1}: From {round(map_range[str(peaks[i - 1]+1)],2)} to {round(map_range[str(peaks[i]+1)],2)}")
+                peak_explanations.append(
+                    f"Segment {i + 1}: From {(map_range[str(peaks[i - 1] + 1)])} to {map_range[str(peaks[i] + 1)]}")
 
-        peak_explanations.append(f"Segment {len(peaks)+1}: From {round(map_range[str(peaks[-1]+1)],2)} to the end")
+        # peak_explanations.append(f"Segment {len(peaks)+1}: From {round(map_range[str(peaks[-1]+1)],2)} to the end")
+        peak_explanations.append(f"Segment {len(peaks) + 1}: From {(map_range[str(peaks[-1] + 1)])} to the end")
     else:
         peak_explanations.append("We have only one Segment!")
 

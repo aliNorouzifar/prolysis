@@ -1,3 +1,16 @@
+"""Inductive process discovery from desirable/undesirable logs and rules.
+
+This module implements the unified inductive miner behind two techniques of the
+thesis:
+
+* **IMbi** (Ch. 6.1) - discovery from a desirable log ``Lp`` (L+) and an
+  undesirable log ``Lm`` (L-), balanced by the ``sup`` and ``ratio`` parameters.
+* **IMr** (Ch. 6.2) - rule-guided discovery from an event log plus a set of
+  declarative ``rules`` (Declare), controlled by ``sup``.
+
+Both are reached through :func:`apply_bi` / :func:`apply_tree`; the combination of
+arguments selects the behaviour (see :func:`apply_bi`).
+"""
 from typing import Optional, Dict, Any, Tuple
 from pm4py.objects.petri_net.obj import PetriNet, Marking
 from pm4py.objects.conversion.process_tree import converter as tree_to_petri
@@ -32,20 +45,58 @@ class Parameters(Enum):
 
 
 
-def apply_bi(Lp=pd.DataFrame(), Lm=pd.DataFrame(), parameters: Optional[Dict[Any, Any]] = None, sup= None, ratio = None, noise_thr =None, size_par = None, rules =None) -> Tuple[PetriNet, Marking, Marking]:
+def apply_bi(Lp=pd.DataFrame(), Lm=pd.DataFrame(), parameters: Optional[Dict[Any, Any]] = None, sup= None, ratio = None, noise_thr =None, size_par = None, rules =None, surv_rate=None) -> Tuple[PetriNet, Marking, Marking]:
+    """Discover a Petri net from event logs and/or declarative rules.
+
+    Unified entry point for IMbi and IMr (see the module docstring):
+
+    * **IMbi** - pass a desirable log ``Lp`` and an undesirable log ``Lm`` together
+      with ``sup`` and ``ratio``. The miner recursively selects process structures
+      that separate desirable from undesirable behaviour.
+    * **IMr** - pass an event log as ``Lp`` (leave ``Lm`` empty), a set of Declare
+      ``rules``, and ``sup``. Discovery prefers structures compliant with the rules.
+
+    Args:
+        Lp: Desirable / main event log (pm4py DataFrame). Defaults to empty.
+        Lm: Undesirable event log (pm4py DataFrame). Empty for IMr.
+        parameters: Optional pm4py parameter dict (activity/timestamp/case keys).
+        sup: Support threshold (typically 0.2-0.4). Required.
+        ratio: Cost ratio balancing L+ vs L- (IMbi). Use ``0`` when no ``Lm``.
+        noise_thr: Optional noise-filtering threshold.
+        size_par: Size normalisation factor, typically ``len(Lp) / len(Lm)`` for
+            IMbi (or ``1`` when there is no ``Lm``).
+        rules: Optional Declare rule set to guide discovery (IMr).
+        surv_rate: Survival rate for desirability-aware discovery. ``None``
+            (default) disables desirability weighting and reproduces the base
+            IMr/IMbi behaviour; pass a numeric rate to enable it.
+
+    Returns:
+        Tuple ``(net, initial_marking, final_marking)`` - the discovered Petri net
+        and its markings.
+
+    Note:
+        Writes an intermediate ``output_files/discovery_log.json``; the working
+        directory must contain (or allow creation of) an ``output_files`` folder.
+    """
     file_path = r'output_files\discovery_log.json'
     with open(file_path, 'w') as file:
         json.dump([], file, indent=4)
-    process_tree = apply_tree(Lp, Lm, parameters, sup=sup, ratio=ratio, noise_thr=noise_thr, size_par=size_par, rules=rules)
+    process_tree = apply_tree(Lp, Lm, parameters, sup=sup, ratio=ratio, noise_thr=noise_thr, size_par=size_par, rules=rules, surv_rate=surv_rate)
     net, initial_marking, final_marking = tree_to_petri.apply(process_tree)
 
     return net, initial_marking, final_marking
 
 
 
-def apply_tree(logp,logm, parameters=None, sup= None, ratio = None, noise_thr =None, size_par = None, rules= None):
+def apply_tree(logp,logm, parameters=None, sup= None, ratio = None, noise_thr =None, size_par = None, rules= None,surv_rate = None):
     if parameters is None:
         parameters = {}
+    if rules is None:
+        # No rules (e.g. plain IMbi via apply_bi): supply the empty structure that
+        # search_desirability expects — rules[0] = (cont, des), a lookup table, a
+        # (dim_cont, dim_des) pair, and the abs-threshold slot — so no constraints
+        # are applied without feeding None into the candidate search.
+        rules = (([], []), {}, ("", ""), "skip")
     contains_empty_traces = False
     traces_length = [len(trace) for trace in logp]
     if traces_length:
@@ -62,7 +113,7 @@ def apply_tree(logp,logm, parameters=None, sup= None, ratio = None, noise_thr =N
     else:
         logm_var = pm4py.stats.get_variants(logm)
     logp_var = pm4py.stats.get_variants(logp)
-    sub = SubtreePlain(logp_var,logm_var, recursion_depth, noise_thr, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, rules= rules)
+    sub = SubtreePlain(logp_var,logm_var, recursion_depth, noise_thr, parameters=parameters, sup= sup, ratio = ratio, size_par = size_par, rules= rules, surv_rate=surv_rate)
 
     process_tree = get_repr(sub, 0, contains_empty_traces=contains_empty_traces)
     # Ensures consistency to the parent pointers in the process tree
@@ -246,7 +297,7 @@ def run_IMr(LPlus_LogFile,support,rules, activities,dim,abs_thr):
         print('process discovery started')
         start = time.time()
         net, initial_marking, final_marking = apply_bi(Lp=event_log_xes, sup=support, ratio=0, size_par=1,
-                                                                 rules=(rules_proccessed, lookup_table, dim))
+                                                                 rules=((rules_proccessed, []), lookup_table, (dim, dim), abs_thr))
         end = time.time()
         print(end - start)
         print('process discovery ended')
@@ -287,13 +338,110 @@ def run_IMr(LPlus_LogFile,support,rules, activities,dim,abs_thr):
         print('The report is generated')
     else:
         net, initial_marking, final_marking = apply_bi(Lp=event_log_xes, sup=support, ratio=0, size_par=1,
-                                                       rules=([], [], ""))
+                                                       rules=(([], []), {}, (dim, dim), "skip"))
 
     pm4py.write_pnml(net, initial_marking, final_marking, os.path.join(r"output_files", "model.pnml"))
     parameters = {pn_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT: "png"}
     gviz = pn_visualizer.apply(net, initial_marking, final_marking, parameters=parameters)
     gviz.attr("graph", bgcolor="transparent")
     return gviz
+
+
+def run_IMr_multi_rule(LPlus_LogFile, support, rules_cont, rules_des, activities, dim_cont,dim_des , abs_thr,surv_rate):
+    event_log_xes = pm4py.read_xes(str(LPlus_LogFile), variant="rustxes")
+    if rules_cont != []:
+        activities = set(activities)
+        lookup_table_path = Path("assets") / "lookup_table.csv"
+
+        # if rules_path=="":
+        #     rules= {}
+        #     activities = {}
+        # else:
+        #     rules, activities = rules_from_json(str(rules_path))
+        rules_proccessed_cont, absence_list_cont = preprocess(rules_cont, dim_cont, 0)
+        if rules_des != []:
+            rules_proccessed_des, absence_list_des = preprocess(rules_des, dim_des, abs_thr)
+        else:
+            rules_proccessed_des = []
+            absence_list_des = []
+
+
+        # absence_list_cont = []
+        # absence_list_des = []
+
+        absence_list = list(set(absence_list_cont).union(set(absence_list_des)))
+
+        event_log_xes = pm4py.filter_event_attribute_values(
+            event_log_xes,
+            level = "event", ### NEW!
+            attribute_key="concept:name",  # Default attribute for activity names in XES
+            values=absence_list,
+            retain=False  # Retain=False means we exclude the specified activities
+        )
+
+        print('rules are preprocessed')
+
+        lookup_table = pd.read_csv(lookup_table_path, sep=';', index_col=0)
+        lookup_table = lookup_table.map(lambda x: ast.literal_eval(x) if isinstance(x, str) else x)
+
+        # S_mapped = declare_processing.assign_alphabet(activities)
+
+        # print('conversion of rules to DFAs started')
+        # dfa_list, total_sup, total_conf = dfa_list_generator(rules_proccessed, S_mapped)
+        # print('conversion of rules to DFAs ended')
+
+        print(f"_______________ support is {support}_____________________")
+        print('process discovery started')
+        start = time.time()
+        net, initial_marking, final_marking = apply_bi(Lp=event_log_xes, sup=support, ratio=0, size_par=1,
+                                                       rules=((rules_proccessed_cont,rules_proccessed_des), lookup_table, (dim_cont,dim_des), abs_thr),surv_rate=surv_rate)
+        end = time.time()
+        print(end - start)
+        print('process discovery ended')
+
+        # print('model_checking started')
+        # rg = construct_reachability_graph(net, initial_marking, use_trans_name=False, parameters=None)
+        # aa = declare_processing.reachability2NFA(rg, activities)
+        # model_dfa = DFA.from_nfa(aa)
+        # cond = []
+        # sup_cost = 0
+        # conf_cost = 0
+        # for dfa in dfa_list:
+        #     constraint_dfa_complement = dfa[1].complement()
+        #     intersection_dfa = model_dfa.intersection(constraint_dfa_complement)
+        #     if not intersection_dfa.isempty():
+        #         sup_cost += dfa[2]
+        #         conf_cost += dfa[2]
+        #     cond.append((dfa[0], intersection_dfa.isempty(), dfa[2], dfa[3]))
+        # print('model_checking ended')
+
+        # report = {}
+        # report['time'] = end - start
+        # report['N.rules'] = len(dfa_list)
+        # report['N.dev'] = len([(x[0][0], x[0][1]) for x in cond if x[1] == False])
+        # if total_sup != 0:
+        #     report['support_cost'] = round(sup_cost / total_sup, 2)
+        # else:
+        #     report['support_cost'] = 0
+        # if total_conf != 0:
+        #     report['confidence_cost'] = round(conf_cost / total_conf, 2)
+        #     report['confidence_cost'] = 0
+        # report['dev_list'] = [(x[0][0], x[0][1], round(x[2], 2), round(x[3], 2)) for x in cond if x[1] == False]
+
+        # with open(os.path.join(r"output_files/", "stats.json"), "w") as json_file:
+        #     json.dump(report, json_file, indent=4)
+
+        # print('The report is generated')
+    else:
+        net, initial_marking, final_marking = apply_bi(Lp=event_log_xes, sup=support, ratio=0, size_par=1,
+                                                       rules=(([],[]), [], ("","")))
+
+    # pm4py.write_pnml(net, initial_marking, final_marking, os.path.join(r"output_files", "model.pnml"))
+    parameters = {pn_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT: "png"}
+    gviz = pn_visualizer.apply(net, initial_marking, final_marking, parameters=parameters)
+    gviz.attr("graph", bgcolor="transparent")
+    # return net, initial_marking, final_marking
+    return gviz,net, initial_marking, final_marking
 
 
 
@@ -305,12 +453,12 @@ def run_IMr_norule(LPlus_LogFile,support):
     print('process discovery started')
     start = time.time()
     net, initial_marking, final_marking = apply_bi(Lp=event_log_xes, sup=support, ratio=0, size_par=1,
-                                                             rules=({}, {}))
+                                                             rules=(([], []), {}, ("support", "support"), "skip"))
     end = time.time()
     print(end - start)
     print('process discovery ended')
 
-    pm4py.write_pnml(net, initial_marking, final_marking, os.path.join(r"output_files", "model.pnml"))
+    # pm4py.write_pnml(net, initial_marking, final_marking, os.path.join(r"output_files", "model.pnml"))
 
 
 

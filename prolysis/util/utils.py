@@ -14,7 +14,7 @@ def import_log(address):
     event_table.to_csv('output_files/out_event.csv', index=False)
 
 
-    return len(case_table),case_table.select_dtypes(include=['number']).columns
+    return len(case_table),case_table.select_dtypes(include=['number', 'datetimetz']).columns
 
 
 def log_to_tables(df, parameters):
@@ -24,8 +24,10 @@ def log_to_tables(df, parameters):
     timestamp_name = parameters['timestamp']
     activity_name = parameters['activity_name']
 
-    # Constants
-    time_unit = 24 * 3600  # Time unit in seconds (1 day)
+    # Case-duration unit in seconds. Project-configurable via `parameters`:
+    # defaults to one day (24*3600, the original behaviour); pass
+    # `parameters['time_unit'] = 3600` for hours, 60 for minutes, etc.
+    time_unit = parameters.get('time_unit', 24 * 3600)
 
     # Output column names
     output_case_id_name = 'case_id'
@@ -43,6 +45,9 @@ def log_to_tables(df, parameters):
     case_table['duration'] = (grouped[timestamp_name].max() - grouped[
         timestamp_name].min()).dt.total_seconds() // time_unit
     case_table['n_events'] = grouped.size()
+    case_table['start_timestamp'] = grouped[timestamp_name].min()
+    case_table['end_timestamp'] = grouped[timestamp_name].max()
+
     case_table = case_table.reset_index().rename(columns={case_id_name: output_case_id_name})
 
     # Build the event table
