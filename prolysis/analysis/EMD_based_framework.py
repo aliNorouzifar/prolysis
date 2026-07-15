@@ -38,7 +38,7 @@ def emd_dist(bin1, bin2):
 
 def bins_generation(kpi, n_bin):
     """Generate bins and map ranges for a given KPI."""
-    case_table = pd.read_csv("output_files/out.csv").sort_values(by=[kpi])
+    case_table = pd.read_csv("output_files/out.csv", keep_default_na=False, na_values=[""]).sort_values(by=[kpi])
 
     # map_range = {i: float(case_table[kpi].iloc[round((i / n_bin) * len(case_table[kpi]))]) for i in range(n_bin)}
     map_range = {i: (case_table[kpi].iloc[round((i / n_bin) * len(case_table[kpi]))]) for i in range(n_bin)}
@@ -295,9 +295,9 @@ def plot_figures_mpl(df, masks, n_bin, map_range, dist_matrix, peaks, w,WINDOWS)
 #
 def export_logs(segments_ids):
     """Export logs for each segment."""
-    case_table = pd.read_csv("output_files/out.csv")
+    case_table = pd.read_csv("output_files/out.csv", keep_default_na=False, na_values=[""])
     event_file = "output_files/out_event.csv"
-    event_table = pd.read_csv(event_file)
+    event_table = pd.read_csv(event_file, keep_default_na=False, na_values=[""])
 
     os.makedirs("output_files/", exist_ok=True)
     for idx, segment_id_set in enumerate(segments_ids, start=1):

@@ -72,11 +72,11 @@ def export_constraints_all_cluster(data_str,constraints_json_path,N_segment):
 
 
 def generate_features(w,kpi,n_bin):
-    case_table = pd.read_csv("output_files/out.csv").sort_values(by=[kpi])
+    case_table = pd.read_csv("output_files/out.csv", keep_default_na=False, na_values=[""]).sort_values(by=[kpi])
     ordered_case_ids = case_table['case_id']
     ordered_case_ids = ordered_case_ids.to_list()
     bin_size = round(len(case_table) / n_bin)
-    event_table = pd.read_csv("output_files/out_event.csv")
+    event_table = pd.read_csv("output_files/out_event.csv", keep_default_na=False, na_values=[""])
     redis_client.set('tasks', json.dumps(list(set(event_table['activity_name']))))
     event_table['case:concept:name'] = event_table['case_id'].astype(str)
     event_table['concept:name'] = event_table['activity_name'].astype(str)
