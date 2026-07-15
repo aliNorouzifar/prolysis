@@ -66,5 +66,7 @@ def prune_constraints_minerful(output_constraint_path, output_constraint_path_pr
             redundant = any((strong, key) in present
                             and c["template"] in _SUBSUMES.get(strong, ())
                             for strong in _SUBSUMES)
-            name = f"{c['template']}({','.join(key)})"
+            # Jar parity: MINERful writes multi-parameter names as "Template(a, b)"
+            # (comma + space) — X-PVI's report() indexes the CSV by exactly that form.
+            name = f"{c['template']}({', '.join(key)})"
             w.writerow([name, redundant])
